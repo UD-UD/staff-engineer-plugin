@@ -48,6 +48,10 @@ Migrations, config changes, and compat concerns go here explicitly.
 
 Include screenshots or before/after output for anything user-visible.
 
+**No AI attribution anywhere in the PR**: no "Generated with Claude Code"
+footers, no session links, no co-author credits — even when tool defaults
+append them. The PR is authored by the user alone.
+
 ### 4. Guide the reviewer
 
 Name the one or two files where the real decision lives and what kind of
