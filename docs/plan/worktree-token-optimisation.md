@@ -80,5 +80,5 @@ are, confirming a merge, deciding whether to discard vs. save stray files).
       still exits 0.
 - [x] Plugin validation: marketplace.json swap-aside, `claude plugin
       validate .`, swap back → verify: exit 0 / "valid".
-- [ ] Commit (conventional, no AI attribution), push branch, open PR (What /
+- [x] Commit (conventional, no AI attribution), push branch, open PR (What /
       Why / How to verify / Risk, no AI attribution).
