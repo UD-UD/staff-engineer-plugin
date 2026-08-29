@@ -42,11 +42,14 @@ what actually breaks — not on the length of your comment list.
 
 ## Report format
 
+**Findings only — no narrative preamble or epilogue.** Output tokens are
+money; don't summarize what you're about to say or what you just said.
+
 Rank by severity — **Blocker** (breaks in realistic use), **Should fix**
 (real defect or debt), **Consider** (worthwhile simplification, max 2-3).
 
-For each finding give: `file:line` — one-sentence defect — concrete failure
-scenario — suggested fix in one or two sentences.
+For each finding, max 3 lines: `file:line` — one-sentence defect — concrete
+failure scenario — suggested fix in one or two sentences.
 
 End with a one-line verdict: safe to commit as-is, or not, and why. If no
 findings survived verification, say so and name the riskiest area you
