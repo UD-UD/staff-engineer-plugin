@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Use when committing changes. Enforces atomic commits with conventional messages - inspects the actual diff first, splits unrelated changes, scans for secrets and debug leftovers, and never bypasses commit hooks.
+description: Use when committing changes, or asked to "commit this". Enforces atomic commits with conventional messages - inspects the actual diff first, splits unrelated changes, scans for secrets and debug leftovers, and never bypasses commit hooks.
 ---
 
 # Disciplined Commits

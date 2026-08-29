@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Use when starting any new feature or significant change. Creates a dedicated git worktree off main (main is never committed to directly), sets up an isolated dev environment for parallel development, captures a test baseline, and starts the worktree's implementation plan in docs/plan/.
+description: Use when starting any new feature or significant change, or asked to "start a feature" or begin a "new feature". Creates a dedicated git worktree off main (never commit to main directly), sets up an isolated dev environment for parallel development, captures a test baseline, and starts the worktree's implementation plan in docs/plan/.
 ---
 
 # Feature Worktrees

@@ -5,7 +5,7 @@
 # ~/.claude/projects session transcripts), so it is correct after a reboot.
 # Live claude processes are an optional overlay, never the source of truth.
 #
-# usage: se [status|env|baseline|teardown <name>|help]
+# usage: se [status|env|baseline|teardown <name>|debt|help]
 #
 #   status            status board (default): worktrees, TODO progress,
 #                     resume commands, anomalies
@@ -18,13 +18,16 @@
 #   teardown <name>   remove .claude/worktrees/<name> once merged and clean:
 #                     preDelete hooks, worktree remove, branch -d, prune.
 #                     No force flag — a dirty or unmerged target is refused.
+#   debt              scan for `se-debt: <ceiling>, <trigger>` markers in
+#                     comments; report file:line + text, flag ones missing
+#                     a trigger, and print a summary. Exit 0 always.
 #   help              this text
 set -u
 
 case "${1:-status}" in
-  status|env|baseline|teardown) ;;
+  status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -416,9 +419,47 @@ cmd_teardown() {
   exit 0
 }
 
+cmd_debt() {
+  # Deterministic debt-marker ledger: `se-debt: <ceiling>, <upgrade trigger>`
+  # left in a comment marks a deliberate shortcut. Only matched right after a
+  # comment-ish prefix, so prose that merely talks about se-debt: is ignored.
+  pattern='(#|//|--|;|\*|<!--)[[:space:]]*se-debt:'
+
+  total=0 no_trigger=0
+  while IFS= read -r hit; do
+    [ -n "$hit" ] || continue
+    file=${hit%%:*}
+    rest=${hit#*:}
+    lineno=${rest%%:*}
+    text=${rest#*:}
+    marker=$(printf '%s\n' "$text" | sed -E 's/.*(se-debt:.*)/\1/')
+    file=${file#./}
+    total=$((total + 1))
+    suffix=""
+    case "$marker" in
+      *,*) : ;;
+      *) suffix=" [no-trigger]"; no_trigger=$((no_trigger + 1)) ;;
+    esac
+    printf '%s:%s  %s%s\n' "$file" "$lineno" "$marker" "$suffix"
+  done < <(cd "$root" && grep -rnEI \
+    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=scratchpad \
+    --exclude-dir=.claude --exclude-dir=dist --exclude-dir=build \
+    --exclude=se \
+    "$pattern" . 2>/dev/null)
+
+  if [ "$total" -eq 0 ]; then
+    echo "No se-debt markers. Clean ledger."
+  else
+    printf '\n%d markers, %d without trigger.\n' "$total" "$no_trigger"
+  fi
+
+  exit 0
+}
+
 case "${1:-status}" in
   status)   cmd_status ;;
   env)      cmd_env ;;
   baseline) cmd_baseline ;;
   teardown) cmd_teardown "${2:-}" ;;
+  debt)     cmd_debt ;;
 esac

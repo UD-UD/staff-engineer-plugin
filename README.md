@@ -9,6 +9,7 @@
 ![skills](https://img.shields.io/badge/skills-8-8CC8F0)
 ![agents](https://img.shields.io/badge/agents-3-A78BD4)
 ![zero LLM CLI](https://img.shields.io/badge/se%20CLI-zero%20LLM-2C7A52)
+[![tests](https://img.shields.io/github/actions/workflow/status/UD-UD/staff-engineer-plugin/test.yml?branch=main&label=tests)](https://github.com/UD-UD/staff-engineer-plugin/actions/workflows/test.yml)
 
 **Plan before coding. Build in parallel waves. Review with fresh eyes.<br>
 Ship through worktrees — main is never touched directly.**
@@ -29,7 +30,7 @@ merged PR, and nothing (not even the AI's own habits) can shortcut it.
 
 | Layer | What it does |
 |---|---|
-| **Principles** | Nine rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution, SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code |
+| **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution, SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
 | **Skills** | The workflow verbs, invoked as `/se:<name>` or auto-triggered when the moment matches |
 | **Agents** | Parallel **Sonnet builders** implement independent plan steps; a read-only **staff-reviewer** hunts verified bugs with no memory of writing the code; a plain-English **explainer** publishes plans and reviews as readable artifact pages |
 | **Hooks** | Shell guardrails on every git command — they cannot be argued with |
@@ -171,7 +172,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 | `/se:commit` | Atomic conventional commits; secret/debug scan; no attribution, no bypasses |
 | `/se:pr` | Self-reviewed PR with why-focused description and risk callouts |
 | `/se:status` | Runs `se` and helps act on its anomalies |
-| `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal) with zero LLM tokens |
+| `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal); `se debt` ledgers `se-debt:` markers — all zero LLM tokens |
 
 ## The layout it gives your projects
 
@@ -215,6 +216,8 @@ staff-engineer-plugin/
 
 Config-driven worktree setup (`worktree.json` sync + lifecycle hooks) is
 adapted from [opencode-worktree](https://github.com/kdcokenny/opencode-worktree) (MIT).
+The simplicity ladder, the debt-marker convention, and the review-output
+style are adapted from [ponytail](https://github.com/DietrichGebert/ponytail) (MIT).
 
 ## Status & known limitations
 

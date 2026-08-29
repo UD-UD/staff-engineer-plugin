@@ -16,13 +16,23 @@ Before implementing:
 
 **Minimum code that solves the problem. Nothing speculative.**
 
-- No features beyond what was asked.
 - No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
 - If you write 200 lines and it could be 50, rewrite it.
+- A deliberate simplification that cuts a real corner with a known ceiling
+  gets a `se-debt: <ceiling>, <upgrade trigger>` comment.
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+Before writing code, stop at the FIRST rung that holds
+(ladder adapted from ponytail, MIT):
+1. Does this need to exist at all? Speculative need = skip it, say so. (YAGNI)
+2. Already in this codebase? Reuse it — look before you write; re-implementing
+   what lives a few files over is the most common slop.
+3. Standard library does it? Use it.
+4. Native platform feature covers it? Use it.
+5. An already-installed dependency solves it? Use it — never add a new one
+   for what a few lines can do.
+6. Can it be one line? One line.
+7. Only then: the minimum code that works.
 
 ## 3. Surgical Changes
 
@@ -75,6 +85,9 @@ session orchestrates — it verifies each result, ticks the TODO, and commits.
   (e.g. it collides with Simplicity First — an interface for a single
   implementation), do NOT deviate silently: explain why and ask for the
   user's explicit approval first.
+- An approved deviation leaves the same `se-debt: <ceiling>, <upgrade
+  trigger>` marker, so the approval isn't lost in a chat transcript —
+  `se debt` (terminal) lists the ledger.
 
 ## 6. Tests Are the Holy Grail
 
