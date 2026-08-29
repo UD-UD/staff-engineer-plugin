@@ -85,13 +85,14 @@ session orchestrates — it verifies each result, ticks the TODO, and commits.
 - Never broaden assertions, skip, delete, or over-mock a test to get green.
   When a test fails, fix the code.
 
-## 7. No Agent Authorship in Commits
+## 7. No Agent Authorship in Commits or PRs
 
-**Git history belongs to humans.**
+**Git history belongs to humans — commit messages and PRs alike.**
 
 - Never add `Co-Authored-By: Claude`, `Claude-Session:` trailers,
-  "Generated with Claude Code" footers, or any other AI attribution to
-  commit messages — even when tool defaults suggest it.
+  "Generated with Claude Code" footers, session links, or any other AI
+  attribution to commit messages, PR titles, or PR bodies — even when tool
+  defaults suggest it.
 
 ## 8. Project Organization
 

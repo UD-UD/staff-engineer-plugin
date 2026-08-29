@@ -56,6 +56,17 @@ if [[ "$lc_cmd" =~ git[[:space:]]+commit ]]; then
   fi
 fi
 
+# --- Rule 2b: no agent authorship in PRs -----------------------------------
+# Same rule as commits, applied to PR titles/bodies written via the gh CLI.
+if [[ "$lc_cmd" =~ gh[[:space:]]+pr[[:space:]]+(create|edit) ]]; then
+  if [[ "$lc_cmd" == *"generated with"*"claude"* ]] || \
+     [[ "$lc_cmd" == *"claude.ai/code"* ]] || \
+     [[ "$lc_cmd" == *"co-authored-by: claude"* ]] || \
+     [[ "$lc_cmd" == *"noreply@anthropic.com"* ]]; then
+    block "Blocked: no agent authorship in PRs. Remove 'Generated with Claude Code' footers, claude.ai session links, and any AI attribution from the PR title/body — the user authors their own history."
+  fi
+fi
+
 # --- Rule 3: no plain force-push -------------------------------------------
 # --force-with-lease is the acceptable form; bare --force / -f is not.
 if [[ "$cmd" =~ git[[:space:]]+push ]] && [[ ! "$cmd" =~ --force-with-lease ]]; then
