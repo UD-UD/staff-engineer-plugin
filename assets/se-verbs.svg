@@ -1,0 +1,31 @@
+<svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The other four se verbs: env, baseline, teardown, debt">
+  <rect width="1200" height="760" rx="12" fill="#14191F"/>
+  <path d="M0 12 A12 12 0 0 1 12 0 H1188 A12 12 0 0 1 1200 12 V40 H0 Z" fill="#1D242C"/>
+  <circle cx="24" cy="20" r="6" fill="#39434E"/>
+  <circle cx="44" cy="20" r="6" fill="#39434E"/>
+  <circle cx="64" cy="20" r="6" fill="#39434E"/>
+  <text x="600" y="25" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="13" fill="#7C8A99">~/work/taskly — the mechanical steps, zero tokens</text>
+  <g font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="15" xml:space="preserve">
+    <text x="30" y="78"  fill="#8CC8F0">$ se env</text>
+    <text x="30" y="104" fill="#D5DDE5">copy .env: done</text>
+    <text x="30" y="130" fill="#D5DDE5">symlink node_modules: done</text>
+    <text x="30" y="156" fill="#D5DDE5">postCreate 'npm ci': ok</text>
+    <text x="30" y="182" fill="#D5DDE5">ignore: appended .claude/worktrees/ to .git/info/exclude</text>
+    <text x="30" y="234" fill="#8CC8F0">$ se baseline</text>
+    <text x="30" y="260" fill="#6FC495">PASS npm test (41s)</text>
+    <text x="30" y="286" fill="#E8796B">FAIL npm run lint (exit 1, 3s)</text>
+    <text x="30" y="312" fill="#D5DDE5">baseline -&gt; scratchpad/baseline.md</text>
+    <text x="30" y="364" fill="#8CC8F0">$ se teardown rate-limit</text>
+    <text x="30" y="390" fill="#E8796B">se teardown: .claude/worktrees/rate-limit has uncommitted changes — refusing:</text>
+    <text x="30" y="416" fill="#E8796B">   M src/middleware/limiter.ts</text>
+    <text x="30" y="468" fill="#7C8A99"># after the WIP is committed and the PR merges:</text>
+    <text x="30" y="494" fill="#8CC8F0">$ se teardown rate-limit</text>
+    <text x="30" y="520" fill="#6FC495">worktree removed: ~/work/taskly/.claude/worktrees/rate-limit</text>
+    <text x="30" y="546" fill="#6FC495">branch deleted: worktree-rate-limit</text>
+    <text x="30" y="572" fill="#6FC495">worktree pruned</text>
+    <text x="30" y="624" fill="#8CC8F0">$ se debt</text>
+    <text x="30" y="650" fill="#D5DDE5">src/limiter.ts:88  se-debt: global lock, per-account locks if throughput matters</text>
+    <text x="30" y="676" fill="#D5DDE5">src/retry.ts:12  se-debt: fixed 3 retries <tspan fill="#E0A458">[no-trigger]</tspan></text>
+    <text x="30" y="728" fill="#7C8A99">2 markers, 1 without trigger.</text>
+  </g>
+</svg>

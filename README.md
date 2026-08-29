@@ -125,6 +125,16 @@ Copy a resume line — that worktree's session continues with its full context.
 Inside a session, `/se:status` runs the same command and helps act on the
 anomaly lines.
 
+### The other four verbs
+
+Status is only `se`'s default. The mechanical steps around a feature —
+environment setup, baseline capture, safe teardown, the debt ledger — are
+verbs of the same CLI. **Claude runs them itself at the right workflow
+moments** (the worktree skill invokes `se env`, `se baseline`, and
+`se teardown` directly); you can also run any of them from a plain terminal:
+
+<img src="assets/se-verbs.svg" alt="The other four se verbs: se env copies files and runs post-create hooks, se baseline records PASS/FAIL, se teardown refuses a dirty worktree then removes it cleanly after merge, se debt lists debt markers" width="100%">
+
 ### The guardrails in action
 
 <details>
