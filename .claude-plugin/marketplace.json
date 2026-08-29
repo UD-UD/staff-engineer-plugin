@@ -1,0 +1,14 @@
+{
+  "name": "ujjal-plugins",
+  "description": "Personal Claude Code plugins for tuning development workflow.",
+  "owner": {
+    "name": "Ujjal Dutta"
+  },
+  "plugins": [
+    {
+      "name": "se",
+      "source": "./",
+      "description": "Tunes Claude Code to work like a staff engineer: plan before coding, rigorous pre-commit review, testing discipline, and clean git/PR workflow."
+    }
+  ]
+}

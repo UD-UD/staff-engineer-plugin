@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# se — deterministic status board for worktree-per-feature development.
+# Part of the staff-engineer (se) Claude Code plugin. No LLM involved:
+# everything printed comes from durable on-disk state (git, docs/plan/,
+# ~/.claude/projects session transcripts), so it is correct after a reboot.
+# Live claude processes are an optional overlay, never the source of truth.
+#
+# usage: se [status|help]
+set -u
+
+case "${1:-status}" in
+  status) ;;
+  help|-h|--help)
+    sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  *)
+    echo "se: unknown command '${1}' (try: se help)" >&2
+    exit 2
+    ;;
+esac
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "se: not inside a git repository" >&2
+  exit 1
+}
+
+# Base branch: origin/HEAD if set, else main.
+base=$(git -C "$root" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+base=${base:-main}
+if git -C "$root" rev-parse --verify -q "origin/$base" >/dev/null 2>&1; then
+  baseref="origin/$base"
+else
+  baseref="$base"
+fi
+
+now=$(date +%s)
+
+mtime_epoch() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+
+rel_age() { # epoch -> 5m / 3h / 2d
+  local diff=$(( now - ${1:-0} ))
+  if   [ "$diff" -lt 3600 ];  then printf '%dm' $((diff / 60))
+  elif [ "$diff" -lt 86400 ]; then printf '%dh' $((diff / 3600))
+  else                             printf '%dd' $((diff / 86400))
+  fi
+}
+
+# ASCII only in aligned columns: printf pads by bytes, so multibyte
+# glyphs (arrows, ellipses) silently break the table.
+trunc() { # string maxlen
+  local s=$1 n=$2
+  if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
+}
+
+# Branches already merged into base (evaluated from the main checkout).
+merged_list=$(git -C "$root" branch --format='%(refname:short)' --merged "$baseref" 2>/dev/null)
+is_merged() { printf '%s\n' "$merged_list" | grep -qFx "$1"; }
+
+# A tip on base's first-parent chain never diverged (fresh branch, or
+# fast-forwarded); a truly merged branch's tip is reachable only through a
+# merge commit's second parent.
+mainline=$(git -C "$root" rev-list --first-parent -n 2000 "$baseref" 2>/dev/null)
+in_mainline() { printf '%s\n' "$mainline" | grep -qx "$1"; }
+
+# Live overlay: cwds of running claude sessions (empty after reboot — fine).
+running_cwds=""
+if command -v claude >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  running_cwds=$(claude agents --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    for a in json.load(sys.stdin):
+        c = a.get("cwd")
+        if c: print(c)
+except Exception:
+    pass
+' 2>/dev/null)
+fi
+is_running() { printf '%s\n' "$running_cwds" | grep -qFx "$1"; }
+
+# Parse worktrees.
+paths=() branches=()
+cur=""
+while IFS= read -r line; do
+  case "$line" in
+    "worktree "*) cur=${line#worktree } ;;
+    "branch refs/heads/"*) paths+=("$cur"); branches+=("${line#branch refs/heads/}") ;;
+    detached) paths+=("$cur"); branches+=("(detached)") ;;
+  esac
+done < <(git -C "$root" worktree list --porcelain)
+
+printf 'se · repo: %s · base: %s · %d worktree(s)\n\n' "$(basename "$root")" "$base" "${#paths[@]}"
+printf '%-26s %-14s %-6s %-32s %s\n' "BRANCH" "GIT" "TODO" "NEXT STEP" "LAST SESSION"
+
+anomalies=()
+resume_lines=()
+
+for ((i = 0; i < ${#paths[@]}; i++)); do
+  p=${paths[$i]} b=${branches[$i]}
+
+  # --- git state ---
+  dirty=$(git -C "$p" status --porcelain 2>/dev/null | grep -c .)
+  gitcol="clean"
+  [ "$dirty" -gt 0 ] && gitcol="dirty:$dirty"
+  ab=$(git -C "$p" rev-list --left-right --count "$baseref...HEAD" 2>/dev/null)
+  behind=${ab%%	*} ahead=${ab##*	}
+  [ "${ahead:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol +$ahead"
+  [ "${behind:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol -$behind"
+  commit_epoch=$(git -C "$p" log -1 --format=%ct 2>/dev/null || echo 0)
+  tip=$(git -C "$p" rev-parse HEAD 2>/dev/null)
+
+  # --- plan TODO progress ---
+  todo="-" next="-"
+  if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
+    plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
+    if [ ! -f "$plan" ]; then
+      cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
+      [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"
+    fi
+    if [ -f "$plan" ]; then
+      done_n=$(grep -cE '^[[:space:]]*- \[x\]' "$plan")
+      open_n=$(grep -cE '^[[:space:]]*- \[ \]' "$plan")
+      todo="$done_n/$((done_n + open_n))"
+      next=$(grep -m1 -E '^[[:space:]]*- \[ \]' "$plan" | sed -E 's/^[[:space:]]*- \[ \] *//')
+      [ -n "$next" ] || next="all done"
+    else
+      anomalies+=("$b — no plan file in docs/plan/ → start one with /se:plan")
+    fi
+  fi
+
+  # --- saved sessions (durable; survives reboot) ---
+  enc=$(printf '%s' "$p" | tr '/.' '--')
+  sdir="$HOME/.claude/projects/$enc"
+  newest=$(/bin/ls -t "$sdir" 2>/dev/null | grep '\.jsonl$' | head -1)
+  count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
+  sess="none — fresh" sess_epoch=0
+  if [ -n "$newest" ]; then
+    sess_epoch=$(mtime_epoch "$sdir/$newest")
+    title=$(grep -m1 -o '"aiTitle":"[^"]*"' "$sdir/$newest" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
+    [ -n "$title" ] || title="(untitled)"
+    sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
+    resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
+  else
+    resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
+  fi
+  is_running "$p" && sess="$sess ● running"
+
+  printf '%-26s %-14s %-6s %-32s %s\n' \
+    "$(trunc "$b" 26)" "$gitcol" "$todo" "$(trunc "$next" 32)" "$sess"
+
+  # --- anomalies ---
+  # "Merged" needs care: a freshly created branch's tip is reachable from
+  # base too. Flag teardown only on real signals — the tip left base's
+  # first-parent chain (a real merge commit exists), or the plan's TODO is
+  # fully ticked (covers the fast-forward-merge case).
+  if [ "$b" != "$base" ] && [ "$b" != "(detached)" ] && is_merged "$b"; then
+    if [ -n "$tip" ] && ! in_mainline "$tip"; then
+      if [ "$dirty" -gt 0 ]; then
+        anomalies+=("$b — MERGED but worktree has $dirty uncommitted file(s): inspect before anything else, never discard")
+      else
+        anomalies+=("$b — merged into $base but worktree still exists → safe teardown (worktree skill step 5)")
+      fi
+    elif [ "$next" = "all done" ]; then
+      anomalies+=("$b — TODO complete and branch merged → safe teardown (worktree skill step 5)")
+    fi
+  fi
+  if [ "$b" = "(detached)" ]; then
+    anomalies+=("$(basename "$p") — detached HEAD: no branch/plan mapping")
+  fi
+  if [ "$b" != "$base" ] && [ "$commit_epoch" -lt $((now - 604800)) ] && [ "$sess_epoch" -lt $((now - 604800)) ]; then
+    anomalies+=("$b — stale: no commits or sessions in 7+ days — abandoned?")
+  fi
+done
+
+if [ "${#anomalies[@]}" -gt 0 ]; then
+  printf '\nAnomalies:\n'
+  for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
+fi
+
+printf '\nResume (most recent first):\n'
+for ((i = 0; i < ${#resume_lines[@]}; i++)); do printf '%s\n' "${resume_lines[$i]}"; done |
+  sort -t'|' -k1,1rn | cut -d'|' -f2- | sed 's/^/  /'
+
+exit 0
