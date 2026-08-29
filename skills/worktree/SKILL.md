@@ -11,15 +11,31 @@ databases, or uncommitted state.
 
 ## 1. Create the worktree
 
-```bash
-git fetch origin main
-git worktree add ../<repo>-<feature> -b feature/<name> origin/main
-```
+Worktrees live **inside the repo** at `.claude/worktrees/<name>` — Claude
+Code's native location. Prefer the native mechanism: it already follows this
+plugin's rules (branches from fresh `origin/<default-branch>`, refuses to
+discard uncommitted work at teardown).
 
-- Sibling directory named `<repo>-<feature>`; branch per the repo's naming
-  convention (default `feature/<name>`).
-- Always branch from fresh `origin/main` (or `main` if there is no remote),
-  never from another feature branch unless the user says the work stacks.
+- **From a Claude Code session**: use the `EnterWorktree` tool with a short
+  name (letters, digits, dashes — anything else blurs the session-to-directory
+  mapping `se` relies on). It creates `.claude/worktrees/<name>` on branch
+  `worktree-<name>` and switches the session into it.
+- **From the terminal**: `claude --worktree <name>` starts a fresh session in
+  a new worktree (add `--tmux` for a dedicated pane).
+- **Without Claude** — same location, manual git:
+
+  ```bash
+  git fetch origin main
+  git worktree add .claude/worktrees/<name> -b feature/<name> origin/main
+  ```
+
+- Always branch from fresh `origin/main` (or `main` if there is no remote) —
+  the native default (`worktree.baseRef: fresh`) does this already. Never
+  branch from another feature branch unless the user says the work stacks.
+- Make the ignore deterministic: if `git check-ignore -q .claude/worktrees`
+  fails, append `.claude/worktrees/` to `.git/info/exclude` (local-only, so
+  no commit to main is needed). Never rely on a machine's global gitignore —
+  on another clone the worktrees would pollute `git status` and test runs.
 
 ## 2. Set up an isolated environment
 
@@ -66,13 +82,16 @@ prose companion:
   Write it down now, so the next worktree is cheaper.
 
 When setup is done, hand the user the parallel-session one-liner:
-`cd ../<repo>-<feature> && claude` — a second Claude Code session can work
-there while this one continues here.
+`cd .claude/worktrees/<name> && claude` — a second Claude Code session can
+work there while this one continues here.
 
 **Resuming tomorrow:** sessions persist on disk per directory, so nothing is
 lost by shutting down. Run `se` (the plugin's status command) from any
 checkout to see every worktree with its TODO progress and the exact
-`claude --continue` command to pick each session back up.
+`claude --continue` command to pick each session back up. This holds however
+the worktree session started — `EnterWorktree` re-homes the session's history
+to the worktree's directory, so `cd .claude/worktrees/<name> &&
+claude --continue` finds it either way.
 
 ## 3. Capture the baseline
 
@@ -103,7 +122,7 @@ worktree — safely, in this order:
 2. Run the `preDelete` hooks from `docs/architecture/worktree.json` — stop
    this worktree's containers, dev servers, and anything else it started.
 3. Confirm nothing is left to save:
-   `git -C ../<repo>-<feature> status --porcelain` shows no modified or
+   `git -C .claude/worktrees/<name> status --porcelain` shows no modified or
    untracked source files. (Gitignored `scratchpad/` contents don't count —
    they die with the worktree by design.) If something IS left: never
    discard it silently — commit it to the feature branch as an explicit
@@ -111,7 +130,13 @@ worktree — safely, in this order:
    put it.
 4. Tick the final TODO items in `docs/plan/<branch-name>.md`; the merged
    plan file stays as the record of what was built.
-5. `git worktree remove ../<repo>-<feature>` — **never with `--force`**. If
-   git refuses, the worktree is dirty; go back to step 3.
-6. `git branch -d feature/<name>` (lowercase `-d` refuses if unmerged —
-   that's the safety) and `git worktree prune`.
+5. Remove it. If the session is currently *inside* the worktree (it got there
+   via `EnterWorktree`), use `ExitWorktree` with `action: "remove"` — its
+   refusal when uncommitted work remains is the safety; never pass
+   `discard_changes: true` without the user's explicit say-so (use
+   `action: "keep"` to step out without deleting). Otherwise:
+   `git worktree remove .claude/worktrees/<name>` — **never with `--force`**.
+   If git refuses, the worktree is dirty; go back to step 3.
+6. `git branch -d <branch>` (lowercase `-d` refuses if unmerged — that's the
+   safety) and `git worktree prune`. `ExitWorktree remove` deletes the branch
+   itself.

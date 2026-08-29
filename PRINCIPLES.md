@@ -106,8 +106,10 @@ session orchestrates — it verifies each result, ticks the TODO, and commits.
 - Root `CLAUDE.md` is a thin shim that routes into `docs/` — keep it updated,
   never let it grow into a manual.
 - Every feature starts in a new worktree off main; never commit to main.
-  Capture a test baseline the moment a worktree is created. After the work
-  merges, remove the worktree safely — never with `--force`.
+  Worktrees live inside the repo at `.claude/worktrees/<name>` — use Claude
+  Code's native mechanism (`EnterWorktree` / `claude --worktree`) when
+  available. Capture a test baseline the moment a worktree is created. After
+  the work merges, remove the worktree safely — never with `--force`.
 
 ## 9. Write Respected Code
 
