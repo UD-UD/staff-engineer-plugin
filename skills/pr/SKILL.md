@@ -1,6 +1,6 @@
 ---
 name: pr
-description: Use when preparing or opening a pull request. Runs a self-review of the full branch diff first, then produces a PR with a why-focused description, verification steps, risk callouts, and reviewer guidance.
+description: Use when preparing or opening a pull request, or asked to "open a PR" or when the branch is "ready for review". Runs a self-review of the full branch diff first, then produces a PR with a why-focused description, verification steps, risk callouts, and reviewer guidance.
 ---
 
 # Pull Request Preparation

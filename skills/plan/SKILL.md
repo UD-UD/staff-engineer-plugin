@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Use before implementing any non-trivial feature, refactor, or bug fix. Produces a staff-engineer implementation plan - clarified requirements, explored codebase patterns, weighed approaches with trade-offs, explicit non-goals, and a verifiable step sequence. Trigger when the user asks to build, add, or change something substantial, or explicitly asks for a plan.
+description: Use before implementing any non-trivial feature, refactor, or bug fix, or when asked "how should we build", "plan this", "design this" - not for trivial one-file fixes. Produces a staff-engineer implementation plan - clarified requirements, explored codebase patterns, weighed approaches with trade-offs, explicit non-goals, and a verifiable step sequence.
 ---
 
 # Staff-Engineer Planning

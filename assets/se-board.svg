@@ -10,13 +10,13 @@
     <text x="30" y="104" fill="#D5DDE5">se · repo: taskly · base: main · 3 worktree(s)</text>
     <text x="30" y="156" fill="#7C8A99">BRANCH                     GIT            TODO   NEXT STEP                        LAST SESSION</text>
     <text x="30" y="182" fill="#D5DDE5">main                       clean          -      -                                11h · Taskly project setup and planning (1)</text>
-    <text x="30" y="208" fill="#D5DDE5">feature/dark-mode          clean          -      -                                none — fresh</text>
-    <text x="30" y="234" fill="#D5DDE5">feature/rate-limit         dirty:1 +2     3/4    3. 429 + Retry-After header      6h · Rate limiting middleware (1)</text>
+    <text x="30" y="208" fill="#D5DDE5">worktree-dark-mode         clean          -      -                                none — fresh</text>
+    <text x="30" y="234" fill="#D5DDE5">worktree-rate-limit        dirty:1 +2     3/4    3. 429 + Retry-After header      6h · Rate limiting middleware (1)</text>
     <text x="30" y="286" fill="#E8796B">Anomalies:</text>
-    <text x="30" y="312" fill="#E8796B">  ! feature/dark-mode — no plan file in docs/plan/ → start one with /se:plan</text>
+    <text x="30" y="312" fill="#E8796B">  ! worktree-dark-mode — no plan file in docs/plan/ → start one with /se:plan</text>
     <text x="30" y="364" fill="#6FC495">Resume (most recent first):</text>
-    <text x="30" y="390" fill="#6FC495">  cd ~/work/taskly-rate-limit &amp;&amp; claude --continue    # feature/rate-limit</text>
+    <text x="30" y="390" fill="#6FC495">  cd ~/work/taskly/.claude/worktrees/rate-limit &amp;&amp; claude --continue    # worktree-rate-limit</text>
     <text x="30" y="416" fill="#6FC495">  cd ~/work/taskly &amp;&amp; claude --continue    # main</text>
-    <text x="30" y="442" fill="#6FC495">  cd ~/work/taskly-dark-mode &amp;&amp; claude    # feature/dark-mode — fresh, no saved session</text>
+    <text x="30" y="442" fill="#6FC495">  cd ~/work/taskly/.claude/worktrees/dark-mode &amp;&amp; claude    # worktree-dark-mode — fresh, no saved session</text>
   </g>
 </svg>

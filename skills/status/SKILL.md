@@ -1,6 +1,6 @@
 ---
 name: status
-description: Use when picking work back up after a break, reboot, or context switch - when the user asks "where was I", "what's in flight", or wants to see all worktrees and how to resume each Claude Code session. Runs the plugin's deterministic `se` command and helps act on what it reports.
+description: Use when picking work back up after a break, reboot, or context switch - "where was I", "what's in flight", "resume work", "which worktrees" - or to see every worktree and how to resume each Claude Code session. Runs the plugin's deterministic `se` command and helps act on what it reports.
 ---
 
 # Status Board (thin wrapper)

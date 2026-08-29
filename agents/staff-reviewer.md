@@ -51,6 +51,14 @@ Rank by severity — **Blocker** (breaks in realistic use), **Should fix**
 For each finding, max 3 lines: `file:line` — one-sentence defect — concrete
 failure scenario — suggested fix in one or two sentences.
 
+❌ "This function might have an issue with how it handles empty inputs — it
+could potentially be worth considering whether a guard clause would make
+this more robust."
+✅ `sync.ts:142 — empty batch skips the flush guard — a consumer polling an
+empty queue never commits its offset — add the length check before
+early-return.`
+
 End with a one-line verdict: safe to commit as-is, or not, and why. If no
-findings survived verification, say so and name the riskiest area you
-examined so the caller knows where you looked.
+findings survived verification, skip everything above — the entire report
+is one line: "No findings survived verification. Riskiest area: <area> —
+<why>."

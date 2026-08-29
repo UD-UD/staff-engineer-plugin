@@ -1,6 +1,6 @@
 ---
 name: review
-description: Use before committing, before opening a PR, or whenever the user asks for a code review. Runs a staff-engineer review of the working diff (or a named commit range) - correctness, error handling, silent failures, security, naming, and needless complexity - and reports verified, ranked findings.
+description: Use before committing, before opening a PR, or when asked to "review this", "check my changes", or "look at this diff". Runs a staff-engineer review of the working diff (or a named commit range) - correctness, error handling, silent failures, security, naming, and needless complexity - reports verified, ranked findings.
 ---
 
 # Staff-Engineer Code Review
@@ -75,9 +75,18 @@ Rank findings by severity:
 - **Consider** — simplification or clarity improvement; at most a few.
 
 Each finding: `file:line`, one-sentence defect statement, the concrete failure
-scenario, and a suggested fix. If nothing survives verification, say the diff
-looks solid and name the riskiest area you checked — an empty review should
-still tell the user where you looked.
+scenario, and a suggested fix. Compact, not narrated:
+
+❌ "This function might have an issue with how it handles empty inputs — it
+could potentially be worth considering whether a guard clause would make
+this more robust."
+✅ `sync.ts:142 — empty batch skips the flush guard — a consumer polling an
+empty queue never commits its offset — add the length check before
+early-return.`
+
+If nothing survives verification, the entire report is one line: "No
+findings survived verification. Riskiest area: <area> — <why>." An empty
+review should still tell the user where you looked.
 
 Report first; apply fixes only when the user asks.
 

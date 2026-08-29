@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when starting a new project or adopting the se workflow in an existing one. Scaffolds the standard self-contained layout (scratchpad/ sandbox, docs/architecture/, docs/decisions.md, docs/plan/, thin CLAUDE.md shim) and, for existing repos, runs a cleanup adoption pass - worktree triage, fat-CLAUDE.md migration, plan backfill, and a main baseline.
+description: Use when starting a new project, adopting the se workflow in an existing one, or asked to "set up this repo", "adopt se", or "clean up this repo for se". Scaffolds the standard layout (scratchpad/, docs/architecture/, docs/decisions.md, docs/plan/, thin CLAUDE.md) and, for existing repos, runs a cleanup adoption pass - worktree triage, CLAUDE.md migration, plan backfill, and a main baseline.
 ---
 
 # Standard Project Layout

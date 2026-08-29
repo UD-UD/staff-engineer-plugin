@@ -1,6 +1,6 @@
 ---
 name: test
-description: Use whenever changing behavior, fixing a bug, or dealing with failing tests. Enforces testing discipline - every behavior change ships with a test, bug fixes start with a failing regression test, the right test level is chosen, and tests are never weakened to make them pass.
+description: Use whenever changing behavior, fixing a bug, or dealing with failing tests - including "write tests" or "why is this test failing". Enforces testing discipline - every behavior change ships with a test, bug fixes start with a failing regression test, the right test level is chosen, and tests are never weakened to make them pass.
 ---
 
 # Testing Discipline
