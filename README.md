@@ -161,7 +161,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 
 | Command | What it does |
 |---|---|
-| `/se:setup` | Scaffold or audit the standard project layout + thin `CLAUDE.md` shim |
+| `/se:setup` | Scaffold the standard layout + thin `CLAUDE.md` shim; adopts existing repos via a cleanup pass (worktree triage, CLAUDE.md migration, plan backfill, main baseline) |
 | `/se:worktree` | Start a feature: worktree, isolated env, baseline, plan; safe teardown after merge |
 | `/se:plan` | Staff-engineer plan → `docs/plan/<branch>.md` with wave-grouped TODO |
 | `/se:review` | Verified-findings-only review of the working diff (delegates to staff-reviewer) |
