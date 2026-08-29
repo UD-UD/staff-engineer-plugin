@@ -45,7 +45,10 @@ without asking.
 
 1. Create the folders above; add `scratchpad/` to `.gitignore`. Git doesn't
    track empty dirs, so drop a one-line `README.md` in `docs/architecture/`
-   and `docs/plan/` stating their purpose.
+   and `docs/plan/` stating their purpose. Worktrees live inside the repo at
+   `.claude/worktrees/`, so make sure it's ignored: if
+   `git check-ignore -q .claude/worktrees` fails, append `.claude/worktrees/`
+   to `.git/info/exclude`.
 2. Start `docs/decisions.md` with the entry format:
 
    ```markdown
@@ -121,9 +124,9 @@ Propose exactly one verdict per existing worktree:
   from its diff) so the board tracks it from now on.
 - **Ask** — detached HEAD or unclear purpose → the user decides.
 
-Worktrees under `.claude/worktrees/` get the same triage. Never relocate a
-surviving worktree — the sibling-directory convention applies to *new*
-worktrees only.
+Sibling-directory worktrees (`../<repo>-<feature>`) get the same triage as
+ones under `.claude/worktrees/`. Never relocate a surviving worktree — the
+`.claude/worktrees/` convention applies to *new* worktrees only.
 
 ### 3. Scaffold the layout
 

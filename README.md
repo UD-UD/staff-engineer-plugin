@@ -78,8 +78,10 @@ gitGraph
    project overview + `worktree.json` setup config), `docs/decisions.md`
    (reverse-chronological decision log), `docs/plan/` (one plan per
    worktree), and a thin `CLAUDE.md` shim that routes agents into all of it.
-2. **`/se:worktree`** — every feature starts here: worktree off fresh main in
-   a sibling directory, config-driven environment setup (copy env files,
+2. **`/se:worktree`** — every feature starts here: worktree off fresh main,
+   inside the repo at `.claude/worktrees/<name>` via Claude Code's native
+   mechanism (`claude --worktree <name>`, or the `EnterWorktree` tool
+   mid-session), config-driven environment setup (copy env files,
    symlink heavy dirs, post-create hooks), **exclusive** ports/DBs so five
    worktrees run in parallel without fighting, and a test **baseline**
    captured before any code changes.
@@ -147,7 +149,7 @@ Blocked: plain force-push can destroy remote history. Use 'git push
 --force-with-lease' if a rewrite is truly needed, and never against a
 shared branch.
 
-$ git worktree remove --force ../repo-feature
+$ git worktree remove --force .claude/worktrees/rate-limit
 Blocked: 'git worktree remove --force' discards uncommitted work
 unrecoverably. Check 'git status' in the worktree, save what matters, then
 remove without --force.
