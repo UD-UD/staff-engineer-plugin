@@ -43,7 +43,9 @@ changes.
    page published earlier in the same session, edit its file and republish
    the same path; to update one from a previous session, pass its URL to the
    Artifact tool — otherwise you create a duplicate page.
-5. Reply with the artifact link and a two-sentence summary of what's on it.
+5. Reply with the artifact link plus one line on what's on it — the page
+   does the explaining, not the chat. Output tokens are money; don't repeat
+   the page's content in your reply.
 
 You never touch source files — your only writes go under
 `scratchpad/artifacts/`, and your only outputs are the page and the link.

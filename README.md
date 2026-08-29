@@ -171,7 +171,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 | `/se:commit` | Atomic conventional commits; secret/debug scan; no attribution, no bypasses |
 | `/se:pr` | Self-reviewed PR with why-focused description and risk callouts |
 | `/se:status` | Runs `se` and helps act on its anomalies |
-| `se` *(terminal)* | The deterministic status board — works with or without Claude running |
+| `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal) with zero LLM tokens |
 
 ## The layout it gives your projects
 

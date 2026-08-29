@@ -39,9 +39,10 @@ discard uncommitted work at teardown).
 
 ## 2. Set up an isolated environment
 
-Setup is **config-driven**: check `docs/architecture/worktree.json` first and
-execute it. If it doesn't exist, create it from what you learn this time —
-setup knowledge belongs in config, not in anyone's memory:
+Setup is **config-driven**: `docs/architecture/worktree.json` holds the
+config, `se env` executes it. If the file doesn't exist, create it from what
+you learn this time — setup knowledge belongs in config, not in anyone's
+memory:
 
 ```json
 {
@@ -52,6 +53,9 @@ setup knowledge belongs in config, not in anyone's memory:
   "hooks": {
     "postCreate": ["npm ci"],
     "preDelete": []
+  },
+  "baseline": {
+    "commands": ["npm test", "npm run lint"]
   }
 }
 ```
@@ -67,9 +71,11 @@ setup knowledge belongs in config, not in anyone's memory:
   codegen, DB migrations for this worktree's own database).
 - `hooks.preDelete` — commands run before teardown (stop this worktree's
   containers and dev servers).
+- `baseline.commands` — see step 3.
 
-Then the isolation rules, with `docs/architecture/dev-environment.md` as the
-prose companion:
+Run **`se env`** (idempotent, `se help` lists what it does), then apply the
+isolation rules below — `docs/architecture/dev-environment.md` is the prose
+companion:
 
 - **Exclusivity**: this worktree's dev server, test runner, and data stores
   must be runnable while other worktrees run theirs. Unique ports, separate
@@ -81,27 +87,26 @@ prose companion:
 - Learned something the config or `dev-environment.md` doesn't capture?
   Write it down now, so the next worktree is cheaper.
 
-When setup is done, hand the user the parallel-session one-liner:
-`cd .claude/worktrees/<name> && claude` — a second Claude Code session can
-work there while this one continues here.
+Hand the user the parallel-session one-liner when setup is done:
+`cd .claude/worktrees/<name> && claude`.
 
 **Resuming tomorrow:** sessions persist on disk per directory, so nothing is
-lost by shutting down. Run `se` (the plugin's status command) from any
-checkout to see every worktree with its TODO progress and the exact
-`claude --continue` command to pick each session back up. This holds however
-the worktree session started — `EnterWorktree` re-homes the session's history
-to the worktree's directory, so `cd .claude/worktrees/<name> &&
-claude --continue` finds it either way.
+lost by shutting down. `se` (from any checkout) shows every worktree's TODO
+progress and its `claude --continue` resume command — including for
+`EnterWorktree`-started sessions, which it re-homes to the worktree's own
+directory.
 
 ## 3. Capture the baseline
 
 Immediately after setup, **before any code changes**:
 
-- Run the test suite, lint, and build. Record a summary in the worktree's
-  `scratchpad/baseline.md`: pass/fail counts, names of failing tests,
-  build/lint status, rough timings.
-- Pre-existing failures belong to main, not to this feature. Note them,
-  don't fix them (surgical changes) — mention them to the user instead.
+- Decide this repo's test/lint/build commands once, and write them into
+  `worktree.json`'s `baseline.commands` — that's the judgment call; every
+  worktree after this one reuses it for free.
+- Run **`se baseline`**. It records PASS/FAIL, duration, and an output tail
+  per command to `scratchpad/baseline.md`. Pre-existing failures belong to
+  main, not to this feature — note them, don't fix them (surgical changes),
+  and mention them to the user.
 - From now on, "done" means: the suite re-run shows **no new failures
   versus this baseline**, and the feature's own tests pass.
 
@@ -119,24 +124,18 @@ worktree — safely, in this order:
 
 1. Confirm the merge actually landed: the branch appears in
    `git branch --merged main`.
-2. Run the `preDelete` hooks from `docs/architecture/worktree.json` — stop
-   this worktree's containers, dev servers, and anything else it started.
-3. Confirm nothing is left to save:
-   `git -C .claude/worktrees/<name> status --porcelain` shows no modified or
-   untracked source files. (Gitignored `scratchpad/` contents don't count —
-   they die with the worktree by design.) If something IS left: never
-   discard it silently — commit it to the feature branch as an explicit
-   WIP commit or stash it, and tell the user what you found and where you
-   put it.
-4. Tick the final TODO items in `docs/plan/<branch-name>.md`; the merged
+2. Tick the final TODO items in `docs/plan/<branch-name>.md`; the merged
    plan file stays as the record of what was built.
-5. Remove it. If the session is currently *inside* the worktree (it got there
-   via `EnterWorktree`), use `ExitWorktree` with `action: "remove"` — its
+3. If the session is currently *inside* the worktree (it got there via
+   `EnterWorktree`), use `ExitWorktree` with `action: "remove"` — its
    refusal when uncommitted work remains is the safety; never pass
    `discard_changes: true` without the user's explicit say-so (use
-   `action: "keep"` to step out without deleting). Otherwise:
-   `git worktree remove .claude/worktrees/<name>` — **never with `--force`**.
-   If git refuses, the worktree is dirty; go back to step 3.
-6. `git branch -d <branch>` (lowercase `-d` refuses if unmerged — that's the
-   safety) and `git worktree prune`. `ExitWorktree remove` deletes the branch
-   itself.
+   `action: "keep"` to step out without deleting). It runs `preDelete`,
+   removes the worktree, and deletes the branch itself.
+4. Otherwise, run **`se teardown <name>`**. It refuses — never `--force` —
+   when the worktree is dirty, unmerged, or the caller is inside it; read
+   what it reports rather than second-guessing it. If it finds something
+   real left uncommitted: never discard it silently — commit it to the
+   feature branch as an explicit WIP commit or stash it, and tell the user
+   what you found and where you put it. Once clean, it runs the
+   `preDelete` hooks, removes the worktree, deletes the branch, and prunes.

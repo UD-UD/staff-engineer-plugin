@@ -39,7 +39,13 @@ conflict with a sibling builder.
 
 ## Report back
 
+**10 lines max, unless you're blocked.** Output tokens are money — the
+orchestrator needs your outcome, not a narrated tour of your work.
+
 - Files changed, one line each on what and why.
 - Test/verify results — actual output, including failures.
 - Any deviation from the step as written, and anything you noticed that the
   orchestrator should know (but did not act on).
+
+A blocked report is the one exception to the cap: explain what's blocking in
+full, since a clean "blocked, here's why" is worth more than brevity.

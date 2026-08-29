@@ -5,13 +5,26 @@
 # ~/.claude/projects session transcripts), so it is correct after a reboot.
 # Live claude processes are an optional overlay, never the source of truth.
 #
-# usage: se [status|help]
+# usage: se [status|env|baseline|teardown <name>|help]
+#
+#   status            status board (default): worktrees, TODO progress,
+#                     resume commands, anomalies
+#   env               set up this checkout from docs/architecture/worktree.json
+#                     (copy files, symlink dirs, postCreate hooks, ignore
+#                     check). Idempotent.
+#   baseline          run worktree.json's baseline.commands, record
+#                     PASS/FAIL + duration + output tail to
+#                     scratchpad/baseline.md
+#   teardown <name>   remove .claude/worktrees/<name> once merged and clean:
+#                     preDelete hooks, worktree remove, branch -d, prune.
+#                     No force flag — a dirty or unmerged target is refused.
+#   help              this text
 set -u
 
 case "${1:-status}" in
-  status) ;;
+  status|env|baseline|teardown) ;;
   help|-h|--help)
-    sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -53,6 +66,32 @@ trunc() { # string maxlen
   if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
 }
 
+# Reads a JSON array of strings at the given dotted key path (e.g.
+# "sync copyFiles"), one item per line. Prints nothing if the file, path, or
+# array is absent — every caller treats "no output" as "nothing configured".
+json_list() {
+  local file=$1; shift
+  python3 - "$file" "$@" <<'PY'
+import json, sys
+file = sys.argv[1]
+keys = sys.argv[2:]
+try:
+    with open(file) as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+for k in keys:
+    if not isinstance(data, dict):
+        sys.exit(0)
+    data = data.get(k)
+    if data is None:
+        sys.exit(0)
+if isinstance(data, list):
+    for item in data:
+        print(item)
+PY
+}
+
 # Branches already merged into base (evaluated from the main checkout).
 merged_list=$(git -C "$root" branch --format='%(refname:short)' --merged "$baseref" 2>/dev/null)
 is_merged() { printf '%s\n' "$merged_list" | grep -qFx "$1"; }
@@ -63,22 +102,19 @@ is_merged() { printf '%s\n' "$merged_list" | grep -qFx "$1"; }
 mainline=$(git -C "$root" rev-list --first-parent -n 2000 "$baseref" 2>/dev/null)
 in_mainline() { printf '%s\n' "$mainline" | grep -qx "$1"; }
 
-# Live overlay: cwds of running claude sessions (empty after reboot — fine).
-running_cwds=""
-if command -v claude >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-  running_cwds=$(claude agents --json 2>/dev/null | python3 -c '
-import json, sys
-try:
-    for a in json.load(sys.stdin):
-        c = a.get("cwd")
-        if c: print(c)
-except Exception:
-    pass
-' 2>/dev/null)
-fi
-is_running() { printf '%s\n' "$running_cwds" | grep -qFx "$1"; }
+# Shared "safe to tear down" test: merged into base AND its tip actually
+# left base's first-parent chain (a real merge commit exists). Used by both
+# the status board's anomaly line and `se teardown`'s hard merge gate.
+is_branch_merged() {
+  is_merged "$1" || return 1
+  local tip
+  tip=$(git -C "$root" rev-parse -q --verify "refs/heads/$1" 2>/dev/null) || return 1
+  ! in_mainline "$tip"
+}
 
-# Parse worktrees.
+# Parse worktrees: paths[] / branches[] in `git worktree list` order — the
+# first entry is always the main checkout, regardless of which checkout $root
+# points at.
 paths=() branches=()
 cur=""
 while IFS= read -r line; do
@@ -88,97 +124,301 @@ while IFS= read -r line; do
     detached) paths+=("$cur"); branches+=("(detached)") ;;
   esac
 done < <(git -C "$root" worktree list --porcelain)
+main_checkout=${paths[0]:-$root}
 
-printf 'se · repo: %s · base: %s · %d worktree(s)\n\n' "$(basename "$root")" "$base" "${#paths[@]}"
-printf '%-26s %-14s %-6s %-32s %s\n' "BRANCH" "GIT" "TODO" "NEXT STEP" "LAST SESSION"
-
-anomalies=()
-resume_lines=()
-
-for ((i = 0; i < ${#paths[@]}; i++)); do
-  p=${paths[$i]} b=${branches[$i]}
-
-  # --- git state ---
-  dirty=$(git -C "$p" status --porcelain 2>/dev/null | grep -c .)
-  gitcol="clean"
-  [ "$dirty" -gt 0 ] && gitcol="dirty:$dirty"
-  ab=$(git -C "$p" rev-list --left-right --count "$baseref...HEAD" 2>/dev/null)
-  behind=${ab%%	*} ahead=${ab##*	}
-  [ "${ahead:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol +$ahead"
-  [ "${behind:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol -$behind"
-  commit_epoch=$(git -C "$p" log -1 --format=%ct 2>/dev/null || echo 0)
-  tip=$(git -C "$p" rev-parse HEAD 2>/dev/null)
-
-  # --- plan TODO progress ---
-  todo="-" next="-"
-  if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
-    plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
-    if [ ! -f "$plan" ]; then
-      cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
-      [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"
-    fi
-    if [ -f "$plan" ]; then
-      done_n=$(grep -cE '^[[:space:]]*- \[x\]' "$plan")
-      open_n=$(grep -cE '^[[:space:]]*- \[ \]' "$plan")
-      todo="$done_n/$((done_n + open_n))"
-      next=$(grep -m1 -E '^[[:space:]]*- \[ \]' "$plan" | sed -E 's/^[[:space:]]*- \[ \] *//')
-      [ -n "$next" ] || next="all done"
-    else
-      anomalies+=("$b — no plan file in docs/plan/ → start one with /se:plan")
-    fi
+cmd_status() {
+  # Live overlay: cwds of running claude sessions (empty after reboot — fine).
+  running_cwds=""
+  if command -v claude >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    running_cwds=$(claude agents --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    for a in json.load(sys.stdin):
+        c = a.get("cwd")
+        if c: print(c)
+except Exception:
+    pass
+' 2>/dev/null)
   fi
+  is_running() { printf '%s\n' "$running_cwds" | grep -qFx "$1"; }
 
-  # --- saved sessions (durable; survives reboot) ---
-  enc=$(printf '%s' "$p" | tr '/.' '--')
-  sdir="$HOME/.claude/projects/$enc"
-  newest=$(/bin/ls -t "$sdir" 2>/dev/null | grep '\.jsonl$' | head -1)
-  count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
-  sess="none — fresh" sess_epoch=0
-  if [ -n "$newest" ]; then
-    sess_epoch=$(mtime_epoch "$sdir/$newest")
-    title=$(grep -m1 -o '"aiTitle":"[^"]*"' "$sdir/$newest" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
-    [ -n "$title" ] || title="(untitled)"
-    sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
-    resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
-  else
-    resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
-  fi
-  is_running "$p" && sess="$sess ● running"
+  printf 'se · repo: %s · base: %s · %d worktree(s)\n\n' "$(basename "$root")" "$base" "${#paths[@]}"
+  printf '%-26s %-14s %-6s %-32s %s\n' "BRANCH" "GIT" "TODO" "NEXT STEP" "LAST SESSION"
 
-  printf '%-26s %-14s %-6s %-32s %s\n' \
-    "$(trunc "$b" 26)" "$gitcol" "$todo" "$(trunc "$next" 32)" "$sess"
+  anomalies=()
+  resume_lines=()
 
-  # --- anomalies ---
-  # "Merged" needs care: a freshly created branch's tip is reachable from
-  # base too. Flag teardown only on real signals — the tip left base's
-  # first-parent chain (a real merge commit exists), or the plan's TODO is
-  # fully ticked (covers the fast-forward-merge case).
-  if [ "$b" != "$base" ] && [ "$b" != "(detached)" ] && is_merged "$b"; then
-    if [ -n "$tip" ] && ! in_mainline "$tip"; then
-      if [ "$dirty" -gt 0 ]; then
-        anomalies+=("$b — MERGED but worktree has $dirty uncommitted file(s): inspect before anything else, never discard")
-      else
-        anomalies+=("$b — merged into $base but worktree still exists → safe teardown (worktree skill step 5)")
+  for ((i = 0; i < ${#paths[@]}; i++)); do
+    p=${paths[$i]} b=${branches[$i]}
+
+    # --- git state ---
+    dirty=$(git -C "$p" status --porcelain 2>/dev/null | grep -c .)
+    gitcol="clean"
+    [ "$dirty" -gt 0 ] && gitcol="dirty:$dirty"
+    ab=$(git -C "$p" rev-list --left-right --count "$baseref...HEAD" 2>/dev/null)
+    behind=${ab%%	*} ahead=${ab##*	}
+    [ "${ahead:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol +$ahead"
+    [ "${behind:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol -$behind"
+    commit_epoch=$(git -C "$p" log -1 --format=%ct 2>/dev/null || echo 0)
+
+    # --- plan TODO progress ---
+    todo="-" next="-"
+    if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
+      plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
+      if [ ! -f "$plan" ]; then
+        cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
+        [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"
       fi
-    elif [ "$next" = "all done" ]; then
-      anomalies+=("$b — TODO complete and branch merged → safe teardown (worktree skill step 5)")
+      if [ -f "$plan" ]; then
+        done_n=$(grep -cE '^[[:space:]]*- \[x\]' "$plan")
+        open_n=$(grep -cE '^[[:space:]]*- \[ \]' "$plan")
+        todo="$done_n/$((done_n + open_n))"
+        next=$(grep -m1 -E '^[[:space:]]*- \[ \]' "$plan" | sed -E 's/^[[:space:]]*- \[ \] *//')
+        [ -n "$next" ] || next="all done"
+      else
+        anomalies+=("$b — no plan file in docs/plan/ → start one with /se:plan")
+      fi
     fi
-  fi
-  if [ "$b" = "(detached)" ]; then
-    anomalies+=("$(basename "$p") — detached HEAD: no branch/plan mapping")
-  fi
-  if [ "$b" != "$base" ] && [ "$commit_epoch" -lt $((now - 604800)) ] && [ "$sess_epoch" -lt $((now - 604800)) ]; then
-    anomalies+=("$b — stale: no commits or sessions in 7+ days — abandoned?")
-  fi
-done
 
-if [ "${#anomalies[@]}" -gt 0 ]; then
-  printf '\nAnomalies:\n'
-  for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
-fi
+    # --- saved sessions (durable; survives reboot) ---
+    enc=$(printf '%s' "$p" | tr '/.' '--')
+    sdir="$HOME/.claude/projects/$enc"
+    newest=$(/bin/ls -t "$sdir" 2>/dev/null | grep '\.jsonl$' | head -1)
+    count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
+    sess="none — fresh" sess_epoch=0
+    if [ -n "$newest" ]; then
+      sess_epoch=$(mtime_epoch "$sdir/$newest")
+      title=$(grep -m1 -o '"aiTitle":"[^"]*"' "$sdir/$newest" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
+      [ -n "$title" ] || title="(untitled)"
+      sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
+      resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
+    else
+      resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
+    fi
+    is_running "$p" && sess="$sess ● running"
 
-printf '\nResume (most recent first):\n'
-for ((i = 0; i < ${#resume_lines[@]}; i++)); do printf '%s\n' "${resume_lines[$i]}"; done |
-  sort -t'|' -k1,1rn | cut -d'|' -f2- | sed 's/^/  /'
+    printf '%-26s %-14s %-6s %-32s %s\n' \
+      "$(trunc "$b" 26)" "$gitcol" "$todo" "$(trunc "$next" 32)" "$sess"
 
-exit 0
+    # --- anomalies ---
+    # "Merged" needs care: a freshly created branch's tip is reachable from
+    # base too. Flag teardown only on real signals — the tip left base's
+    # first-parent chain (a real merge commit exists), or the plan's TODO is
+    # fully ticked (covers the fast-forward-merge case).
+    if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
+      wtname=$(basename "$p")
+      if is_branch_merged "$b"; then
+        if [ "$dirty" -gt 0 ]; then
+          anomalies+=("$b — MERGED but worktree has $dirty uncommitted file(s): inspect before anything else, never discard")
+        else
+          anomalies+=("$b — merged into $base but worktree still exists → run \`se teardown $wtname\`")
+        fi
+      elif is_merged "$b" && [ "$next" = "all done" ]; then
+        anomalies+=("$b — TODO complete and branch merged → run \`se teardown $wtname\`")
+      fi
+    fi
+    if [ "$b" = "(detached)" ]; then
+      anomalies+=("$(basename "$p") — detached HEAD: no branch/plan mapping")
+    fi
+    if [ "$b" != "$base" ] && [ "$commit_epoch" -lt $((now - 604800)) ] && [ "$sess_epoch" -lt $((now - 604800)) ]; then
+      anomalies+=("$b — stale: no commits or sessions in 7+ days — abandoned?")
+    fi
+  done
+
+  if [ "${#anomalies[@]}" -gt 0 ]; then
+    printf '\nAnomalies:\n'
+    for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
+  fi
+
+  printf '\nResume (most recent first):\n'
+  for ((i = 0; i < ${#resume_lines[@]}; i++)); do printf '%s\n' "${resume_lines[$i]}"; done |
+    sort -t'|' -k1,1rn | cut -d'|' -f2- | sed 's/^/  /'
+
+  exit 0
+}
+
+cmd_env() {
+  wt_json="$root/docs/architecture/worktree.json"
+  if [ ! -f "$wt_json" ]; then
+    echo "no docs/architecture/worktree.json — nothing to do"
+    exit 0
+  fi
+
+  main=$main_checkout
+
+  # sync.copyFiles — untracked files the worktree needs, copied from main.
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -e "$root/$f" ]; then
+      echo "copy $f: already present"
+    elif [ -e "$main/$f" ]; then
+      cp -p "$main/$f" "$root/$f"
+      echo "copy $f: done"
+    else
+      echo "copy $f: missing in main"
+    fi
+  done < <(json_list "$wt_json" sync copyFiles)
+
+  # sync.symlinkDirs — shared by symlink instead of reinstalling.
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if [ -e "$root/$d" ] || [ -L "$root/$d" ]; then
+      echo "symlink $d: already present"
+    elif [ -e "$main/$d" ]; then
+      ln -s "$main/$d" "$root/$d"
+      echo "symlink $d: done"
+    else
+      echo "symlink $d: missing in main"
+    fi
+  done < <(json_list "$wt_json" sync symlinkDirs)
+
+  # hooks.postCreate — run inside this checkout; a failure is fatal, since
+  # a half-set-up worktree should stop the workflow, not silently continue.
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    out=$(cd "$root" && sh -c "$cmd" </dev/null 2>&1); rc=$?
+    if [ "$rc" -eq 0 ]; then
+      echo "postCreate '$cmd': ok"
+    else
+      printf '%s\n' "$out" | tail -20
+      echo "postCreate '$cmd': failed (exit $rc)" >&2
+      exit 1
+    fi
+  done < <(json_list "$wt_json" hooks postCreate)
+
+  # Ignore check (from the main checkout, so it applies repo-wide).
+  if git -C "$main" check-ignore -q .claude/worktrees; then
+    echo "ignore: .claude/worktrees/ already excluded"
+  else
+    common=$(git -C "$main" rev-parse --git-common-dir)
+    case "$common" in
+      /*) : ;;
+      *) common="$main/$common" ;;
+    esac
+    echo ".claude/worktrees/" >> "$common/info/exclude"
+    echo "ignore: appended .claude/worktrees/ to $common/info/exclude"
+  fi
+
+  exit 0
+}
+
+cmd_baseline() {
+  wt_json="$root/docs/architecture/worktree.json"
+  commands=""
+  [ -f "$wt_json" ] && commands=$(json_list "$wt_json" baseline commands)
+  if [ -z "$commands" ]; then
+    cat >&2 <<'EOF'
+se baseline: no baseline.commands in docs/architecture/worktree.json
+add a "baseline" section, e.g.:
+  "baseline": {"commands": ["npm test", "npm run lint"]}
+EOF
+    exit 1
+  fi
+
+  mkdir -p "$root/scratchpad"
+  out_md="$root/scratchpad/baseline.md"
+  branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  {
+    printf '# Baseline\n\n'
+    printf 'Date: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+    printf 'Branch: %s\n' "$branch"
+  } > "$out_md"
+
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    start=$(date +%s)
+    out=$(cd "$root" && sh -c "$cmd" </dev/null 2>&1); rc=$?
+    dur=$(( $(date +%s) - start ))
+    tail_out=$(printf '%s\n' "$out" | tail -5)
+    if [ "$rc" -eq 0 ]; then
+      echo "PASS $cmd (${dur}s)"
+      { printf '\n## %s\n\nStatus: PASS\n' "$cmd"; } >> "$out_md"
+    else
+      echo "FAIL $cmd (exit $rc, ${dur}s)"
+      { printf '\n## %s\n\nStatus: FAIL (exit %d)\n' "$cmd" "$rc"; } >> "$out_md"
+    fi
+    { printf 'Duration: %ss\n\n```\n%s\n```\n' "$dur" "$tail_out"; } >> "$out_md"
+  done < <(printf '%s\n' "$commands")
+
+  echo "baseline -> scratchpad/baseline.md"
+  exit 0
+}
+
+cmd_teardown() {
+  name=${1:-}
+  if [ -z "$name" ]; then
+    echo "se teardown: usage: se teardown <name>" >&2
+    exit 1
+  fi
+
+  target="$main_checkout/.claude/worktrees/$name"
+
+  registered=""
+  for ((i = 0; i < ${#paths[@]}; i++)); do
+    [ "${paths[$i]}" = "$target" ] && registered="yes" && branch=${branches[$i]}
+  done
+  if [ -z "$registered" ]; then
+    echo "se teardown: $target is not a registered worktree (see: git worktree list)" >&2
+    exit 1
+  fi
+
+  cwd=$(pwd -P 2>/dev/null || pwd)
+  case "$cwd" in
+    "$target"|"$target"/*)
+      echo "se teardown: refusing — the current directory is inside $target; cd out first" >&2
+      exit 1
+      ;;
+  esac
+
+  dirty=$(git -C "$target" status --porcelain 2>/dev/null)
+  if [ -n "$dirty" ]; then
+    echo "se teardown: $target has uncommitted changes — refusing:" >&2
+    printf '%s\n' "$dirty" | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  if [ "$branch" = "(detached)" ] || ! is_branch_merged "$branch"; then
+    echo "se teardown: branch '$branch' is not merged into $base — refusing" >&2
+    exit 1
+  fi
+
+  # hooks.preDelete — from the TARGET's worktree.json, run inside the target.
+  target_json="$target/docs/architecture/worktree.json"
+  if [ -f "$target_json" ]; then
+    while IFS= read -r cmd; do
+      [ -n "$cmd" ] || continue
+      out=$(cd "$target" && sh -c "$cmd" </dev/null 2>&1); rc=$?
+      if [ "$rc" -eq 0 ]; then
+        echo "preDelete '$cmd': ok"
+      else
+        printf '%s\n' "$out" | tail -20
+        echo "preDelete '$cmd': failed (exit $rc)" >&2
+        exit 1
+      fi
+    done < <(json_list "$target_json" hooks preDelete)
+  fi
+
+  if ! git -C "$main_checkout" worktree remove "$target"; then
+    echo "se teardown: git worktree remove failed for $target" >&2
+    exit 1
+  fi
+  echo "worktree removed: $target"
+
+  if ! git -C "$main_checkout" branch -d "$branch"; then
+    echo "se teardown: git branch -d failed for $branch" >&2
+    exit 1
+  fi
+  echo "branch deleted: $branch"
+
+  git -C "$main_checkout" worktree prune
+  echo "worktree pruned"
+
+  exit 0
+}
+
+case "${1:-status}" in
+  status)   cmd_status ;;
+  env)      cmd_env ;;
+  baseline) cmd_baseline ;;
+  teardown) cmd_teardown "${2:-}" ;;
+esac

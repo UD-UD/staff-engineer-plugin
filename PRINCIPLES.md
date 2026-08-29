@@ -119,3 +119,16 @@ session orchestrates — it verifies each result, ticks the TODO, and commits.
   reader (human or agent) should understand it without you there to explain.
 - If the code needs a comment to explain *what* it does, rewrite the code;
   comments are for *why*.
+
+## 10. Quiet Execution
+
+**Output tokens are money. Mechanics are quiet; judgment is loud.**
+
+- Between tool calls: at most one short status line, and only when
+  direction changes or something load-bearing surfaced.
+- Never restate what tool output already shows.
+- Don't narrate the obvious next step.
+- Final message: outcome, evidence, next action — compact. Long-form
+  explanation belongs in the explainer's artifact page, not the chat.
+- Never economize on judgment: assumptions, pushback, blockers, and
+  findings always surface (Principle 1 wins).
