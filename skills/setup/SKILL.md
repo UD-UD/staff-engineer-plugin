@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when starting a new project or bringing an existing one up to the standard self-contained layout - scratchpad/ agent sandbox, docs/architecture/, docs/decisions.md, docs/plan/, and a thin CLAUDE.md shim that routes into them.
+description: Use when starting a new project or adopting the se workflow in an existing one. Scaffolds the standard self-contained layout (scratchpad/ sandbox, docs/architecture/, docs/decisions.md, docs/plan/, thin CLAUDE.md shim) and, for existing repos, runs a cleanup adoption pass - worktree triage, fat-CLAUDE.md migration, plan backfill, and a main baseline.
 ---
 
 # Standard Project Layout
@@ -91,10 +91,78 @@ without asking.
    - Keep this file a thin shim — details belong in `docs/`.
    ```
 
-4. For an existing project: audit against this layout, report the gaps, and
-   fill them on approval. Seed `docs/architecture/` from what you learn
-   exploring the codebase — that exploration is expensive; write it down so
-   no agent pays for it twice.
+4. For an existing project, run the full adoption pass below instead of
+   just scaffolding.
+
+## Adopting an existing repo
+
+Adoption is **audit, then act**: nothing destructive happens until the user
+has seen the list and approved it. The order matters.
+
+### 1. Audit — touch nothing yet
+
+- Run `se` for the worktree and session picture; `git worktree list`,
+  `git status`.
+- Inventory: CLAUDE.md size and content, what `docs/` already holds,
+  `.gitignore`, and how dev/test actually runs (package.json scripts,
+  Makefile, compose files).
+- Present the findings in three groups: worktrees to triage, layout gaps,
+  CLAUDE.md state. Then act group by group, on approval.
+
+### 2. Worktree triage — the cleanup
+
+Propose exactly one verdict per existing worktree:
+
+- **Tear down** — branch merged and tree clean → worktree skill, step 5.
+- **Preserve, then tear down** — abandoned but dirty → WIP-commit or stash
+  to its branch first; uncommitted work is never discarded.
+- **Adopt** — still active → keep it, and backfill
+  `docs/plan/<branch>.md` (goal, current state, remaining TODO derived
+  from its diff) so the board tracks it from now on.
+- **Ask** — detached HEAD or unclear purpose → the user decides.
+
+Worktrees under `.claude/worktrees/` get the same triage. Never relocate a
+surviving worktree — the sibling-directory convention applies to *new*
+worktrees only.
+
+### 3. Scaffold the layout
+
+Same pieces as a new project (`scratchpad/` + gitignore entry,
+`docs/architecture/`, `docs/decisions.md`, `docs/plan/`). If `docs/`
+already has content, fold — don't duplicate: leave existing docs where they
+are and index them from `docs/architecture/README.md`. Seed
+`docs/decisions.md` with its first entry: adopting the se workflow, plus
+every triage verdict from step 2.
+
+### 4. Slim the CLAUDE.md
+
+A fat CLAUDE.md (hundreds of lines) migrates: split its content into
+`docs/architecture/` files by topic, then replace it with the thin shim
+(template above) pointing at the new homes. Show the mapping — old section
+→ new file — and get approval before moving. Content is **moved, never
+dropped**.
+
+### 5. Seed the machine-readable setup
+
+- `docs/architecture/worktree.json` from what the repo shows: env files to
+  copy, the install command for `postCreate`, services to stop in
+  `preDelete`.
+- `docs/architecture/dev-environment.md`: how to run dev and tests, and
+  which hardcoded ports/DB paths must become env-configurable before
+  worktrees can run in parallel — propose those as separate small changes.
+
+### 6. Baseline main
+
+Run the test suite once on main; record results in
+`scratchpad/baseline-main.md`. From adoption day forward those failures
+belong to main — no feature inherits blame for them.
+
+### 7. Verify and land
+
+Run `se` again: remaining anomalies should be only what the user chose to
+keep. Then land the adoption like any other change — a feature branch
+(e.g. `chore/adopt-se`) and a PR, never a direct commit to main. The
+guardrails apply from day one, including to the adoption itself.
 
 ## Keeping it alive
 
