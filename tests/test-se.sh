@@ -148,6 +148,40 @@ git -C "$main" worktree remove "$plusfeat"
 git -C "$main" branch -D feat-plus >/dev/null 2>&1
 rm -rf "$plushome"
 
+# --- one session, two homes -------------------------------------------------
+# Entering a worktree leaves a transcript in the launch directory AND writes
+# one under the worktree, both with the same session id. Without detection the
+# board shows one live session as two resumable rows, and joining the launch
+# row would reopen it in the wrong checkout.
+movedhome=$(mktemp -d)
+mainreal=$(cd "$main" && pwd -P)
+featreal=$(cd "$feat" && pwd -P)
+sid="11111111-2222-3333-4444-555555555555"
+maindir="$movedhome/.claude/projects/$(printf '%s' "$mainreal" | tr '/.' '--')"
+featdir="$movedhome/.claude/projects/$(printf '%s' "$featreal" | tr '/.' '--')"
+mkdir -p "$maindir" "$featdir"
+printf '{"type":"ai-title","aiTitle":"Shared session"}\n{"cwd":"%s"}\n' "$mainreal" > "$maindir/$sid.jsonl"
+printf '{"type":"ai-title","aiTitle":"Shared session"}\n{"cwd":"%s"}\n' "$featreal" > "$featdir/$sid.jsonl"
+# The worktree's copy is the newer one, so that is where the session lives.
+touch -t 202601010000 "$maindir/$sid.jsonl"
+touch -t 202601020000 "$featdir/$sid.jsonl"
+
+out=$(cd "$main" && HOME="$movedhome" SE_NO_PROMPT=1 "$se")
+assert_contains "the launch row reports the session moved" "$out" "moved to $(basename "$feat")"
+assert_contains "the row it moved to still offers a resume" "$out" "cd $featreal && claude --continue"
+assert_contains "the launch row offers a fresh session, not a resume" "$out" "cd $mainreal && claude    # "
+assert_not_contains "the launch row does not offer to continue the moved session" \
+  "$out" "cd $mainreal && claude --continue"
+
+# Same id, but the launch copy is the newer one: nothing moved, so the launch
+# row keeps its resume and the older copy is the one marked as moved.
+touch -t 202601030000 "$maindir/$sid.jsonl"
+out=$(cd "$main" && HOME="$movedhome" SE_NO_PROMPT=1 "$se")
+assert_contains "the newest copy keeps the resume" "$out" "cd $mainreal && claude --continue"
+assert_contains "the older copy is the one reported moved" "$out" "moved to $(basename "$main")"
+
+rm -rf "$movedhome"
+
 # =================================================================== help ==
 out=$(cd "$main" && "$se" help)
 rc=$?
@@ -247,6 +281,13 @@ git -C "$main" merge -q --no-ff -m "merge feat-x" feat-x >/dev/null
 
 mkdir -p "$feat/node_modules/pkg"
 echo "cache" > "$feat/node_modules/pkg/index.js"
+# Per-checkout local state that main has too (a dev database). It is not
+# unique, so the gate lets teardown proceed — but git cannot rmdir a
+# non-empty directory, so leaving it here used to abort the removal after
+# git had already unregistered the worktree.
+mkdir -p "$feat/.data" "$main/.data"
+echo "worktree db" > "$feat/.data/dev-shared.db"
+echo "main db" > "$main/.data/dev-shared.db"
 # Nested too: a monorepo's packages/*/node_modules is just as rebuildable,
 # and must not read as a precious unique file.
 mkdir -p "$feat/packages/app/node_modules/pkg"
@@ -261,6 +302,9 @@ assert_true "teardown's preDelete run entry executes (sentinel exists)" "$([ -f 
 assert_contains "teardown prints a manual-checks heading for check: entries" "$out" "manual checks (not run):"
 assert_contains "teardown prints the check text verbatim" "$out" "touch $checkcanary"
 assert_true "teardown never executes a check: entry" "$([ ! -e "$checkcanary" ] && echo 0 || echo 1)"
+assert_contains "teardown says which local state it cleared" "$out" "clearing local state: .data"
+assert_true "main's own local state is untouched" "$([ -f "$main/.data/dev-shared.db" ] && echo 0 || echo 1)"
+assert_not_contains "teardown does not fail on a non-empty directory" "$out" "Directory not empty"
 
 # ============================================== teardown: new hard gates ===
 # feat-y: a config-declared `copy` file exists in the worktree and differs
