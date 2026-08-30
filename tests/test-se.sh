@@ -226,6 +226,29 @@ assert_contains "a session naming a removed worktree stays where it is stored" \
 
 rm -rf "$atthome"
 
+# --- a detached checkout has no branch to head its group with ---------------
+# Groups are headed by branch so the list and the table share a key, but a
+# detached checkout has no branch — fall back to its directory name rather
+# than heading the group "(detached)", which names nothing.
+dethome=$(mktemp -d)
+detwt="$main/.claude/worktrees/det"
+git -C "$main" worktree add -q --detach "$detwt" main
+detreal=$(cd "$detwt" && pwd -P)
+detdir="$dethome/.claude/projects/$(printf '%s' "$detreal" | tr '/.' '--')"
+mkdir -p "$detdir"
+printf '{"type":"ai-title","aiTitle":"Detached work"}\n{"cwd":"%s"}\n' "$detreal" \
+  > "$detdir/sess-det.jsonl"
+
+out=$(cd "$main" && HOME="$dethome" SE_NO_PROMPT=1 "$se")
+assert_contains "a detached checkout heads its group with the directory name" \
+  "$out" "$(printf '\n  det\n')"
+assert_not_contains "a group is never headed \"(detached)\"" \
+  "$out" "$(printf '\n  (detached)\n')"
+assert_contains "its session is still resumable" "$out" "cd $detreal && claude --resume sess-det"
+
+git -C "$main" worktree remove "$detwt"
+rm -rf "$dethome"
+
 # --- plan lookup: branch names contain characters the filename does not -----
 # Claude Code's own worktrees produce branches like `worktree-fix+mobile`, but
 # the plan file on disk has the `+` flattened. Looking only for the exact
