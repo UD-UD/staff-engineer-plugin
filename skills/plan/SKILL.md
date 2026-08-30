@@ -86,8 +86,14 @@ ordering — because independence becomes parallelism at execution time.
 
 Present the plan under these headings: **Problem**, **Approach** (chosen +
 alternatives considered), **Files touched**, **Non-goals**, **Risks**,
-**Steps**. Then stop and get sign-off before writing any code, unless the user
-already told you to proceed straight through.
+**Steps**.
+
+**Then stop.** Reviewing the plan together is the cheapest place to catch a
+wrong assumption; after implementation starts, the same correction costs a
+rewrite. Ask for the user's go-ahead and wait for it — do not write code, do
+not dispatch builder agents, do not "start on the safe parts". Publishing the
+plan is not the same as it being approved. Only the user lifts this gate, and
+only for the stretch of work they say.
 
 Present it in **plain English**: delegate to the `explainer` agent (bundled
 with this plugin) to publish the plan as a readable artifact page — simple
@@ -119,7 +125,8 @@ Once approved, in projects using the standard layout:
   wave to its own `builder` agent (bundled, Sonnet) in a single message —
   each given the step text, its verify condition, and its file scope. The
   main session stays the orchestrator: it verifies each builder's result,
-  ticks the checkbox, then launches the next wave. Steps whose file scopes
+  ticks the checkbox, reports what landed, and **waits for the user's
+  go-ahead before launching the next wave**. Steps whose file scopes
   overlap never run in the same wave; a step too entangled to delegate is
   done by the orchestrator itself.
 - Append the key decisions (chosen approach, rejected alternatives, why) to

@@ -131,11 +131,14 @@ Immediately after setup, **before any code changes**:
 Create `docs/plan/<branch-name>.md` using the plan skill. One plan file per
 worktree — that is all `docs/plan/` ever contains. The plan ends with its
 `## TODO` checklist; **implementation starts only after the checklist
-exists**, and items get checked off as steps complete.
+exists and the user has approved the plan** — the checklist existing is not
+the approval. Items get checked off as steps complete.
 
 ## 5. Finish and tear down safely
 
-Merge to main only via the PR workflow (`pr` skill). Then delete the
+Merge to main only via the PR workflow (`pr` skill). Teardown destroys a
+directory, so it is its own stage gate: say the merge landed and what you
+are about to remove, then **wait for the user's go-ahead**. Then delete the
 worktree — safely, in this order:
 
 1. Confirm the merge actually landed: the branch appears in

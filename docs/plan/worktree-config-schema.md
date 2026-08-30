@@ -68,3 +68,16 @@ Wrap-up:
 - [x] `bash tests/run.sh` green from repo root and from a different cwd
       (72/72 both times); `claude plugin validate .` green.
 - [x] Commit, push, open PR (no AI attribution anywhere).
+
+Added after review (user request, same PR):
+- [x] Verification finding: the ignored-file gate excluded rebuildable dirs
+      only at the top level, so a monorepo's `packages/*/node_modules` read
+      as precious and blocked teardown. Segment-wise `is_rebuildable()` +
+      permanent nested-node_modules case in `tests/test-se.sh`.
+- [x] Stage gates: `PRINCIPLES.md` §4 (boundaries, dispatch-is-
+      implementation, waivers don't carry), `skills/plan/SKILL.md` (closed
+      the "unless told to proceed straight through" loophole; wave-to-wave
+      stop), `skills/worktree/SKILL.md` (§4 approval ≠ checklist, §5
+      teardown gate), `skills/pr/SKILL.md` (confirm before opening),
+      `PRINCIPLES-SUBAGENT.md` (subagents hold no gates), README
+      (principles row + honest "instruction-enforced" limitation).

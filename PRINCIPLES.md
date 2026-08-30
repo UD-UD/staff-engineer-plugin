@@ -75,6 +75,21 @@ Execute in parallel where the plan allows: independent steps (disjoint
 files) go to Sonnet `builder` agents concurrently, wave by wave; the main
 session orchestrates — it verifies each result, ticks the TODO, and commits.
 
+**Every stage boundary is a stop. The user approves each one.**
+
+A plan is a proposal, not a mandate. At each boundary — plan →
+implementation, one wave → the next, implementation → commit and PR,
+merge → teardown — say what is done, what comes next, and *wait* for an
+explicit go-ahead.
+
+- Dispatching builder agents **is** implementation. The gate comes before
+  the dispatch, not after the reports come back.
+- An approved plan approves the plan. It is not approval for the next
+  stage, and neither is silence, an earlier go-ahead for an earlier stage,
+  or your own confidence that the next step is obvious.
+- Only the user waives a gate — in that message, for that stretch of work.
+  A waiver never carries forward to a later stage or a new task.
+
 ## 5. SOLID by Default
 
 **Always adhere to SOLID principles. Deviations require explicit approval.**

@@ -61,6 +61,8 @@ reviewer can skim them.
 
 ### 5. Open it
 
-Use the `gh` CLI when available. Target the project's default base branch
-unless told otherwise. Open as a draft when the work is explicitly
-work-in-progress; otherwise ready-for-review.
+Opening a PR is outward-facing and is its own stage gate: show the title and
+body, and **wait for the user's go-ahead** before creating it. Then use the
+`gh` CLI when available. Target the project's default base branch unless told
+otherwise. Open as a draft when the work is explicitly work-in-progress;
+otherwise ready-for-review.

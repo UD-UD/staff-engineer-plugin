@@ -30,7 +30,7 @@ merged PR, and nothing (not even the AI's own habits) can shortcut it.
 
 | Layer | What it does |
 |---|---|
-| **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution, SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
+| **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution (every stage boundary waits for your approval), SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
 | **Skills** | The workflow verbs, invoked as `/se:<name>` or auto-triggered when the moment matches |
 | **Agents** | Parallel **Sonnet builders** implement independent plan steps; a read-only **staff-reviewer** hunts verified bugs with no memory of writing the code; a plain-English **explainer** publishes plans and reviews as readable artifact pages |
 | **Hooks** | Shell guardrails on every git command — they cannot be argued with |
@@ -256,3 +256,5 @@ First draft, evolving fast. Honest edges:
   a squashed or fast-forwarded branch reads as unmerged and is refused; use
   manual `git worktree remove` + `git branch -d` for those.
 - Builder file-scope discipline is instruction-enforced, not mechanical.
+- So are the stage gates (principle 4): a hook can't tell approval from
+  silence, so they live in the principles and skills, not in a script.
