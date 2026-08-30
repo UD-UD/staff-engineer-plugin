@@ -248,40 +248,6 @@ git -C "$main" worktree remove "$plusfeat2"
 git -C "$main" branch -D "feat+plus2" >/dev/null 2>&1
 rm -rf "$planhome"
 
-# --- one session, two homes -------------------------------------------------
-# Entering a worktree leaves a transcript in the launch directory AND writes
-# one under the worktree, both with the same session id. Without detection the
-# board shows one live session as two resumable rows, and joining the launch
-# row would reopen it in the wrong checkout.
-movedhome=$(mktemp -d)
-mainreal=$(cd "$main" && pwd -P)
-featreal=$(cd "$feat" && pwd -P)
-sid="11111111-2222-3333-4444-555555555555"
-maindir="$movedhome/.claude/projects/$(printf '%s' "$mainreal" | tr '/.' '--')"
-featdir="$movedhome/.claude/projects/$(printf '%s' "$featreal" | tr '/.' '--')"
-mkdir -p "$maindir" "$featdir"
-printf '{"type":"ai-title","aiTitle":"Shared session"}\n{"cwd":"%s"}\n' "$mainreal" > "$maindir/$sid.jsonl"
-printf '{"type":"ai-title","aiTitle":"Shared session"}\n{"cwd":"%s"}\n' "$featreal" > "$featdir/$sid.jsonl"
-# The worktree's copy is the newer one, so that is where the session lives.
-touch -t 202601010000 "$maindir/$sid.jsonl"
-touch -t 202601020000 "$featdir/$sid.jsonl"
-
-out=$(cd "$main" && HOME="$movedhome" SE_NO_PROMPT=1 "$se")
-assert_contains "the launch row reports the session moved" "$out" "moved to $(basename "$feat")"
-assert_contains "the row it moved to still offers a resume" "$out" "cd $featreal && claude --continue"
-assert_contains "the launch row offers a fresh session, not a resume" "$out" "cd $mainreal && claude    # "
-assert_not_contains "the launch row does not offer to continue the moved session" \
-  "$out" "cd $mainreal && claude --continue"
-
-# Same id, but the launch copy is the newer one: nothing moved, so the launch
-# row keeps its resume and the older copy is the one marked as moved.
-touch -t 202601030000 "$maindir/$sid.jsonl"
-out=$(cd "$main" && HOME="$movedhome" SE_NO_PROMPT=1 "$se")
-assert_contains "the newest copy keeps the resume" "$out" "cd $mainreal && claude --continue"
-assert_contains "the older copy is the one reported moved" "$out" "moved to $(basename "$main")"
-
-rm -rf "$movedhome"
-
 # =================================================================== help ==
 out=$(cd "$main" && "$se" help)
 rc=$?

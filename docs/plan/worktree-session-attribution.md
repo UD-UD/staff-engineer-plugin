@@ -144,18 +144,24 @@ Wave 1 (parallel — disjoint files):
         `sed 's/[^A-Za-z0-9._-]/-/g'` only after the exact name misses
 
 Wave 2 (all `bin/se`, strictly in order):
-- [ ] 3. Delete the two-copies pre-pass, the "moved to" row, orphaned vars,
+- [x] 3. Delete the two-copies pre-pass, the "moved to" row, orphaned vars,
       and the test block encoding the wrong model
       → verify: no `wt_moved` remains; suite no worse than after step 1
-- [ ] 4. `session_worktree()` + gathering pre-pass (8 newest per folder)
+      — also removed `wt_sdir/wt_newest/wt_id/wt_epoch`, `resume_lines`,
+        `resume_menu`, `resume_hassess`, `resume_sorted_*` and the `order[]`
+        sort, all orphaned by the rewrite
+- [x] 4. `session_worktree()` + gathering pre-pass (8 newest per folder)
       → verify: attribution tests pass, incl. torn-down and path-form cases
-- [ ] 5. Regroup the resume output: headings, cap 3, continuous numbering,
+      — added `checkout_of()` for the path→checkout mapping; scalar
+        `sess_epoch` renamed `last_epoch` to stop it colliding with the new
+        `sess_when` array
+- [x] 5. Regroup the resume output: headings, cap 3, continuous numbering,
       "started from …" only when owner ≠ home, fresh-start rows
       → verify: grouped-output tests pass in both output formats
-- [ ] 6. Carry session ids into `resume_launch`; switch to `--resume <id>`
+- [x] 6. Carry session ids into `resume_launch`; switch to `--resume <id>`
       → verify: pty tests show `args:--resume <id>` and the right `cwd:`
-- [ ] 7. Table last column = newest attributed session; drop `(N)`
-      → verify: full suite green
+- [x] 7. Table last column = newest attributed session; drop `(N)`
+      → verify: full suite green — 134 pass, 0 fail (baseline 124)
 
 Wave 3:
 - [ ] 8. Manual run in `fancy-chat`; resolve the open resume-directory risk
