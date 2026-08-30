@@ -104,16 +104,17 @@ rc=$?
 assert_exit "se status exits 0" 0 "$rc"
 assert_contains "se status prints a BRANCH header" "$out" "BRANCH"
 
-# resume list is a numbered menu, but non-interactive runs (stdin/stdout not
-# a tty, as every `$(...)` capture in this suite is) never prompt.
-assert_contains "se status numbers resume line 1" "$out" "  1  cd "
-assert_contains "se status numbers resume line 2" "$out" "  2  cd "
+# resume list is a numbered menu grouped under a heading per checkout, so its
+# rows sit one level in. Non-interactive runs (stdin/stdout not a tty, as
+# every `$(...)` capture in this suite is) never prompt.
+assert_contains "se status numbers resume line 1" "$out" "    1  cd "
+assert_contains "se status numbers resume line 2" "$out" "    2  cd "
 assert_not_contains "se status (non-interactive) does not print the picker prompt" "$out" "Join ["
 
 out=$(cd "$main" && HOME="$emptyhome" SE_NO_PROMPT=1 "$se")
 rc=$?
 assert_exit "SE_NO_PROMPT=1 se exits 0" 0 "$rc"
-assert_contains "SE_NO_PROMPT=1 se numbers resume line 1" "$out" "  1  cd "
+assert_contains "SE_NO_PROMPT=1 se numbers resume line 1" "$out" "    1  cd "
 assert_not_contains "SE_NO_PROMPT=1 se does not print the picker prompt" "$out" "Join ["
 
 rm -rf "$emptyhome"
@@ -134,7 +135,7 @@ printf '{"type":"ai-title","aiTitle":"Plus named worktree"}\n{"cwd":"%s"}\n' "$p
 
 out=$(cd "$main" && HOME="$plushome" SE_NO_PROMPT=1 "$se")
 assert_contains "session found despite + flattened in the stored path" "$out" "Plus named worktree"
-assert_not_contains "the + worktree is not reported fresh" "$out" "feat+plus && claude    # feat-plus — fresh"
+assert_not_contains "the + worktree is not reported fresh" "$out" "$plusreal && claude    # no saved session"
 
 # Same loose directory, but its transcript's cwd points somewhere else: the
 # looser match must not be trusted, or two similarly-named worktrees would
@@ -147,6 +148,83 @@ assert_not_contains "loose match rejected when the transcript cwd disagrees" "$o
 git -C "$main" worktree remove "$plusfeat"
 git -C "$main" branch -D feat-plus >/dev/null 2>&1
 rm -rf "$plushome"
+
+# --- attribution: the folder holding a transcript is not where the work was -
+# Claude Code stores a session's transcript in the project folder for the
+# directory it was LAUNCHED from and never moves or copies it. Entering a
+# worktree is recorded inline instead, as a `worktree-state` line naming the
+# worktree; leaving writes the same record with a null payload. So a session
+# filed under the main checkout may have done all its work in a worktree, and
+# the board has to say so — and resume it there.
+atthome=$(mktemp -d)
+mainreal=$(cd "$main" && pwd -P)
+featreal=$(cd "$feat" && pwd -P)
+attmain="$atthome/.claude/projects/$(printf '%s' "$mainreal" | tr '/.' '--')"
+attfeat="$atthome/.claude/projects/$(printf '%s' "$featreal" | tr '/.' '--')"
+mkdir -p "$attmain" "$attfeat"
+
+# Launched from main, entered the worktree, and left again before ending —
+# the common shape: 9 of 10 real worktree sessions end back outside. The last
+# NON-NULL record is what says where the work happened.
+{
+  printf '{"type":"ai-title","aiTitle":"Mobile work"}\n'
+  printf '{"cwd":"%s"}\n' "$mainreal"
+  printf '{"type":"worktree-state","sessionId":"sess-mobile","worktreeSession":{"originalCwd":"%s","worktreePath":"%s","worktreeName":"feat/x","worktreeBranch":"feat-x","originalBranch":"main"}}\n' "$mainreal" "$featreal"
+  printf '{"cwd":"%s"}\n' "$featreal"
+  printf '{"type":"worktree-state","sessionId":"sess-mobile","worktreeSession":null}\n'
+} > "$attmain/sess-mobile.jsonl"
+
+printf '{"type":"ai-title","aiTitle":"Plain main work"}\n{"cwd":"%s"}\n' "$mainreal" \
+  > "$attmain/sess-plain.jsonl"
+printf '{"type":"ai-title","aiTitle":"Own worktree session"}\n{"cwd":"%s"}\n' "$featreal" \
+  > "$attfeat/sess-own.jsonl"
+
+touch -t 202601030000 "$attfeat/sess-own.jsonl"
+touch -t 202601020000 "$attmain/sess-mobile.jsonl"
+touch -t 202601010000 "$attmain/sess-plain.jsonl"
+
+out=$(cd "$main" && HOME="$atthome" SE_NO_PROMPT=1 "$se")
+
+assert_contains "a session that entered a worktree resumes there, by id" \
+  "$out" "cd $featreal && claude --resume sess-mobile"
+assert_not_contains "it is not offered from the directory it was launched in" \
+  "$out" "cd $mainreal && claude --resume sess-mobile"
+assert_contains "the worktree's own session is still listed" \
+  "$out" "cd $featreal && claude --resume sess-own"
+assert_contains "a session that never left stays with its own checkout" \
+  "$out" "cd $mainreal && claude --resume sess-plain"
+assert_contains "the moved session says which checkout it started from" \
+  "$out" "started from $(basename "$mainreal")"
+assert_contains "resume rows are grouped under a heading naming the branch" \
+  "$out" "$(printf '\n  feat-x\n')"
+assert_contains "the base checkout gets its own group heading" \
+  "$out" "$(printf '\n  main\n')"
+# One code path for every resume: name the conversation, never trust file order.
+assert_not_contains "resume no longer relies on --continue" "$out" "claude --continue"
+
+# At most three sessions per checkout, newest first: a fourth is not offered.
+for s in ancient older newer; do
+  printf '{"type":"ai-title","aiTitle":"Filler %s"}\n{"cwd":"%s"}\n' "$s" "$mainreal" \
+    > "$attmain/sess-$s.jsonl"
+done
+touch -t 202512310000 "$attmain/sess-ancient.jsonl"
+touch -t 202601010100 "$attmain/sess-older.jsonl"
+touch -t 202601010200 "$attmain/sess-newer.jsonl"
+out=$(cd "$main" && HOME="$atthome" SE_NO_PROMPT=1 "$se")
+assert_contains "the checkout's three newest sessions are offered" "$out" "sess-newer"
+assert_not_contains "a fourth, older session is not offered" "$out" "sess-ancient"
+
+# A worktree that has been torn down since the session ran: the recorded
+# worktreePath matches no checkout, so the session falls back to the folder
+# that stores it rather than vanishing from the board.
+printf '{"type":"ai-title","aiTitle":"Gone worktree"}\n{"cwd":"%s"}\n{"type":"worktree-state","sessionId":"sess-gone","worktreeSession":{"originalCwd":"%s","worktreePath":"%s/.claude/worktrees/removed","worktreeName":"removed","worktreeBranch":"removed","originalBranch":"main"}}\n' \
+  "$mainreal" "$mainreal" "$mainreal" > "$attfeat/sess-gone.jsonl"
+touch -t 202601040000 "$attfeat/sess-gone.jsonl"
+out=$(cd "$main" && HOME="$atthome" SE_NO_PROMPT=1 "$se")
+assert_contains "a session naming a removed worktree stays where it is stored" \
+  "$out" "cd $featreal && claude --resume sess-gone"
+
+rm -rf "$atthome"
 
 # --- plan lookup: branch names contain characters the filename does not -----
 # Claude Code's own worktrees produce branches like `worktree-fix+mobile`, but
@@ -518,9 +596,9 @@ run_picker() { # $1 = stdin to feed the pty
 }
 
 # A real resume_launch call always logs args exactly "" (bare `claude`) or
-# "--continue" — distinct from the harmless `claude agents --json` probe
+# "--resume <id>" — distinct from the harmless `claude agents --json` probe
 # cmd_status's live overlay also makes through the same fake claude on PATH.
-launched() { grep -qE '^args:(--continue)?$' "$fakelog"; }
+launched() { grep -qE '^args:(--resume [^ ]+)?$' "$fakelog"; }
 
 have_pty=0
 if command -v script >/dev/null 2>&1; then
@@ -535,9 +613,12 @@ if [ "$have_pty" -eq 1 ]; then
   assert_exit "resume picker: q exits 0" 0 "$rc"
   assert_true "resume picker: q launches nothing" "$(launched && echo 1 || echo 0)"
 
-  # Interactive rows name the worktree; the runnable `cd ... && claude` form
-  # is for the non-interactive output, where a bare name would be useless.
-  assert_contains "picker menu names the worktree" "$out" "1  $(basename "$pickrepo")"
+  # Interactive rows sit under a heading naming the branch; the runnable
+  # `cd ... && claude` form is for the non-interactive output, where a bare
+  # name would be useless.
+  assert_contains "picker groups rows under the branch" "$out" "  main"
+  assert_contains "picker rows are indented under their group" "$out" "    1 "
+  assert_contains "picker menu names the session" "$out" "pick test session"
   assert_not_contains "picker menu drops the full cd command" "$out" "&& claude"
 
   : > "$fakelog"
@@ -550,20 +631,20 @@ if [ "$have_pty" -eq 1 ]; then
   : > "$fakelog"
   run_picker $'1\n' >/dev/null
   log=$(cat "$fakelog" 2>/dev/null)
-  assert_contains "resume picker: choosing 1 invokes claude --continue" "$log" "args:--continue"
+  assert_contains "resume picker: choosing 1 resumes that session by id" "$log" "args:--resume sess1"
   assert_contains "resume picker: choosing 1 launches in the right directory" "$log" "cwd:$pickrepo_real"
 
   : > "$fakelog"
   run_picker $'n1\n' >/dev/null
   log=$(cat "$fakelog" 2>/dev/null)
   assert_true "resume picker: n1 invokes claude" "$(launched && echo 0 || echo 1)"
-  assert_not_contains "resume picker: n1 invokes claude with no --continue" "$log" "args:--continue"
+  assert_not_contains "resume picker: n1 starts fresh rather than resuming" "$log" "args:--resume"
   assert_contains "resume picker: n1 launches in the right directory" "$log" "cwd:$pickrepo_real"
 else
   printf 'SKIP - resume picker: q exits 0 and launches nothing (no pty available)\n'
   printf 'SKIP - resume picker: invalid choice re-prompts (no pty available)\n'
-  printf 'SKIP - resume picker: choosing 1 invokes claude --continue in the right directory (no pty available)\n'
-  printf 'SKIP - resume picker: n1 invokes claude with no --continue in the right directory (no pty available)\n'
+  printf 'SKIP - resume picker: choosing 1 resumes that session by id in the right directory (no pty available)\n'
+  printf 'SKIP - resume picker: n1 starts fresh in the right directory (no pty available)\n'
 fi
 rm -rf "$pickhome"
 
