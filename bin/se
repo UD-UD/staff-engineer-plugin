@@ -64,6 +64,19 @@ rel_age() { # epoch -> 5m / 3h / 2d
 
 # ASCII only in aligned columns: printf pads by bytes, so multibyte
 # glyphs (arrows, ellipses) silently break the table.
+# True when any path SEGMENT is rebuildable noise, at any depth — a
+# monorepo's packages/*/node_modules must not read as precious.
+is_rebuildable() { # relative path
+  local seg IFS=/
+  for seg in $1; do
+    case "$seg" in
+      node_modules|.next|dist|build|.turbo|coverage|.venv|__pycache__|.pnpm-store|.cache|scratchpad)
+        return 0 ;;
+    esac
+  done
+  return 1
+}
+
 trunc() { # string maxlen
   local s=$1 n=$2
   if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
@@ -526,19 +539,7 @@ cmd_teardown() {
   ignored_hits=()
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    case "$rel" in
-      node_modules|node_modules/*) continue ;;
-      .next|.next/*) continue ;;
-      dist|dist/*) continue ;;
-      build|build/*) continue ;;
-      .turbo|.turbo/*) continue ;;
-      coverage|coverage/*) continue ;;
-      .venv|.venv/*) continue ;;
-      __pycache__|__pycache__/*) continue ;;
-      .pnpm-store|.pnpm-store/*) continue ;;
-      .cache|.cache/*) continue ;;
-      scratchpad|scratchpad/*) continue ;;
-    esac
+    is_rebuildable "$rel" && continue
     [ -e "$main_checkout/$rel" ] && continue
     ignored_hits+=("$rel")
   done < <(git -C "$target" ls-files --others --ignored --exclude-standard 2>/dev/null)

@@ -165,6 +165,10 @@ git -C "$main" merge -q --no-ff -m "merge feat-x" feat-x >/dev/null
 
 mkdir -p "$feat/node_modules/pkg"
 echo "cache" > "$feat/node_modules/pkg/index.js"
+# Nested too: a monorepo's packages/*/node_modules is just as rebuildable,
+# and must not read as a precious unique file.
+mkdir -p "$feat/packages/app/node_modules/pkg"
+echo "cache" > "$feat/packages/app/node_modules/pkg/index.js"
 
 out=$(cd "$main" && "$se" teardown feat-x 2>&1)
 rc=$?
