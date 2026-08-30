@@ -760,11 +760,24 @@ cmd_teardown() {
   # unique .dev.vars or a local *.db with no git history would otherwise be
   # destroyed silently. Rebuildable noise is excluded.
   ignored_hits=()
+  sweep_tops=()
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    is_rebuildable "$rel" && continue
-    [ -e "$main_checkout/$rel" ] && continue
-    ignored_hits+=("$rel")
+    case "$rel" in ''|..*|/*) continue ;; esac
+    if ! is_rebuildable "$rel" && [ ! -e "$main_checkout/$rel" ]; then
+      ignored_hits+=("$rel")
+      continue
+    fi
+    # Rebuildable, or local state the main checkout has too: disposable, but
+    # git refuses to rmdir a non-empty directory, so it has to go first —
+    # named out loud, never silently. Collect top-level entries so one rm
+    # clears a whole node_modules instead of thousands.
+    top=${rel%%/*}
+    already=""
+    for ((k = 0; k < ${#sweep_tops[@]}; k++)); do
+      [ "${sweep_tops[$k]}" = "$top" ] && already=1 && break
+    done
+    [ -n "$already" ] || sweep_tops+=("$top")
   done < <(git -C "$target" ls-files --others --ignored --exclude-standard 2>/dev/null)
   if [ "${#ignored_hits[@]}" -gt 0 ]; then
     printf '%sse teardown: %s has unique gitignored files with no git history — refusing:%s\n' \
@@ -799,8 +812,22 @@ cmd_teardown() {
     done < <(printf '%s\n' "$predelete_records")
   fi
 
+  # Clear the disposable ignored leftovers the gates above cleared as safe.
+  # Without this `git worktree remove` dies on "Directory not empty" after
+  # it has already unregistered the worktree, leaving an orphaned directory
+  # and a half-done teardown.
+  for ((i = 0; i < ${#sweep_tops[@]}; i++)); do
+    t=${sweep_tops[$i]}
+    [ -n "$t" ] && [ -e "$target/$t" ] || continue
+    printf '%sclearing local state: %s%s\n' "$C_DIM" "$t" "$C_RESET"
+    rm -rf "$target/${t:?}"
+  done
+
   if ! git -C "$main_checkout" worktree remove "$target"; then
     printf '%sse teardown: git worktree remove failed for %s%s\n' "$C_RED" "$target" "$C_RESET" >&2
+    if [ -d "$target" ] && [ ! -e "$target/.git" ]; then
+      echo "git has already unregistered it, so what is left is an ordinary directory: inspect it, then 'rm -rf $target' and 'git -C $main_checkout worktree prune'." >&2
+    fi
     exit 1
   fi
   printf '%sworktree removed: %s%s\n' "$C_GREEN" "$target" "$C_RESET"

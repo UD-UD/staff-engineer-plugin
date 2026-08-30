@@ -281,6 +281,13 @@ git -C "$main" merge -q --no-ff -m "merge feat-x" feat-x >/dev/null
 
 mkdir -p "$feat/node_modules/pkg"
 echo "cache" > "$feat/node_modules/pkg/index.js"
+# Per-checkout local state that main has too (a dev database). It is not
+# unique, so the gate lets teardown proceed — but git cannot rmdir a
+# non-empty directory, so leaving it here used to abort the removal after
+# git had already unregistered the worktree.
+mkdir -p "$feat/.data" "$main/.data"
+echo "worktree db" > "$feat/.data/dev-shared.db"
+echo "main db" > "$main/.data/dev-shared.db"
 # Nested too: a monorepo's packages/*/node_modules is just as rebuildable,
 # and must not read as a precious unique file.
 mkdir -p "$feat/packages/app/node_modules/pkg"
@@ -295,6 +302,9 @@ assert_true "teardown's preDelete run entry executes (sentinel exists)" "$([ -f 
 assert_contains "teardown prints a manual-checks heading for check: entries" "$out" "manual checks (not run):"
 assert_contains "teardown prints the check text verbatim" "$out" "touch $checkcanary"
 assert_true "teardown never executes a check: entry" "$([ ! -e "$checkcanary" ] && echo 0 || echo 1)"
+assert_contains "teardown says which local state it cleared" "$out" "clearing local state: .data"
+assert_true "main's own local state is untouched" "$([ -f "$main/.data/dev-shared.db" ] && echo 0 || echo 1)"
+assert_not_contains "teardown does not fail on a non-empty directory" "$out" "Directory not empty"
 
 # ============================================== teardown: new hard gates ===
 # feat-y: a config-declared `copy` file exists in the worktree and differs
