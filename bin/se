@@ -18,9 +18,18 @@
 #                     prompts to join or start a session there. Set
 #                     SE_NO_PROMPT=1 to always skip the prompt (also
 #                     skipped automatically when not interactive).
-#   env               set up this checkout from docs/architecture/worktree.json
+#
+#                     Sessions are grouped under the checkout they worked in,
+#                     which is not always the one storing their transcript: a
+#                     session that entered a worktree is listed there, marked
+#                     "started from <dir>". Each checkout shows its 3 newest
+#                     sessions, read from the 8 newest transcripts in its
+#                     project folder — anything older is not offered.
+#   env               set up this checkout: create the gitignored scratchpad/
+#                     sandbox, then apply docs/architecture/worktree.json
 #                     (copy files, symlink dirs, postCreate hooks, ignore
-#                     check). Idempotent.
+#                     check). Idempotent, and the scratchpad half runs even
+#                     with no worktree.json.
 #   baseline          run worktree.json's baseline commands, record
 #                     PASS/FAIL + duration + output tail to
 #                     scratchpad/baseline.md
@@ -36,7 +45,10 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+    # From line 2 to the first line that is not a comment, minus that line —
+    # the usage block defines its own end, so editing it never silently
+    # truncates the help the way a hardcoded range does.
+    sed -n '2,/^[^#]/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -130,6 +142,39 @@ session_dir() { # absolute path -> project dir (may not exist)
 trunc() { # string maxlen
   local s=$1 n=$2
   if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
+}
+
+# The worktree a session actually worked in, or nothing. Claude Code keeps
+# writing a session's transcript to the project folder for the directory it
+# was LAUNCHED from — it never moves or copies it when the session enters a
+# worktree. The move is recorded inline instead: one `worktree-state` record
+# on the way in naming the worktree, and the same record with a null payload
+# on the way out. The LAST NON-NULL one is the answer; the final record is
+# usually the null, because most sessions leave the worktree before ending.
+session_worktree() { # transcript -> worktree path, or nothing
+  local states last
+  states=$(grep '"type":"worktree-state"' "$1" 2>/dev/null)
+  [ -n "$states" ] || return 0
+  last=$(printf '%s\n' "$states" | grep -v '"worktreeSession":null' | tail -1)
+  [ -n "$last" ] || return 0
+  printf '%s' "$last" | sed -E 's/.*"worktreePath":"([^"]*)".*/\1/'
+}
+
+# Index into paths[] of the checkout at $1, or the fallback $2 when nothing
+# matches — usually a worktree torn down since the session ran, which must
+# fall back to the folder storing the transcript rather than vanish. git
+# reports fully resolved paths (macOS /var -> /private/var) while a transcript
+# records the path as the session saw it, so try both forms.
+checkout_of() { # path fallback-index -> index
+  local want=$1 fb=$2 k real
+  [ -n "$want" ] || { printf '%s' "$fb"; return 0; }
+  real=$(cd "$want" 2>/dev/null && pwd -P) || real=""
+  for ((k = 0; k < ${#paths[@]}; k++)); do
+    if [ "${paths[$k]}" = "$want" ] || { [ -n "$real" ] && [ "${paths[$k]}" = "$real" ]; }; then
+      printf '%s' "$k"; return 0
+    fi
+  done
+  printf '%s' "$fb"
 }
 
 # Single python entry point for docs/architecture/worktree.json. Two modes,
@@ -254,30 +299,33 @@ done < <(git -C "$root" worktree list --porcelain)
 main_checkout=${paths[0]:-$root}
 
 # Launch Claude Code for one resume-menu row. n: 1-based index into the
-# resume_sorted_* arrays cmd_status built. mode: "join" (that row's saved
-# session, falling back to a fresh session when it has none — same as the
-# row's own printed text) or "new" (always a fresh session).
+# resume_* arrays cmd_status built, already in display order. mode: "join"
+# (that row's saved session, falling back to a fresh session when it has none
+# — same as the row's own printed text) or "new" (always a fresh session).
+#
+# Joining always names the session id rather than using --continue: a row's
+# session is not necessarily the newest transcript in the directory we launch
+# in, so --continue would open a different conversation.
 resume_launch() {
-  local n=$1 mode=$2 idx p hassess use_continue
+  local n=$1 mode=$2 idx p id
   idx=$((n - 1))
-  p=${resume_sorted_paths[$idx]}
-  hassess=${resume_sorted_hassess[$idx]}
-  use_continue=0
-  [ "$mode" = "join" ] && [ "$hassess" = "1" ] && use_continue=1
+  p=${resume_paths[$idx]}
+  id=${resume_ids[$idx]}
+  [ "$mode" = "join" ] || id=""
 
   if ! command -v claude >/dev/null 2>&1; then
-    if [ "$use_continue" = "1" ]; then
-      echo "se: claude not found on PATH — run this yourself: cd $p && claude --continue" >&2
+    if [ -n "$id" ]; then
+      echo "se: claude not found on PATH — run this yourself: cd $p && claude --resume $id" >&2
     else
       echo "se: claude not found on PATH — run this yourself: cd $p && claude" >&2
     fi
     exit 1
   fi
 
-  if [ "$use_continue" = "1" ]; then
-    printf '→ cd %s && claude --continue\n' "$p"
+  if [ -n "$id" ]; then
+    printf '→ cd %s && claude --resume %s\n' "$p" "$id"
     cd "$p" || exit 1
-    exec claude --continue
+    exec claude --resume "$id"
   else
     printf '→ cd %s && claude\n' "$p"
     cd "$p" || exit 1
@@ -311,41 +359,37 @@ except Exception:
   printf '%s%s%s\n' "$C_DIM" "$hdrrow" "$C_RESET"
 
   anomalies=()
-  resume_lines=()
-  resume_menu=()
-  resume_paths=()
-  resume_hassess=()
 
   # Decided once, up front: it selects both the resume-row format and
   # whether the picker runs. A real terminal on both ends, not suppressed.
   will_prompt=0
   if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ]; then will_prompt=1; fi
 
-  # --- pre-pass: whose session is it, really? -------------------------------
-  # A session that starts in one directory and then enters a worktree leaves a
-  # transcript in BOTH project folders under the same session id. Without this
-  # pass one live session shows up as two resumable rows, and joining the
-  # launch-directory row would continue it rooted in the wrong checkout.
-  # The row whose copy was written most recently is where the session now
-  # lives; the other row is told so instead of offering a stale resume.
-  wt_sdir=() wt_newest=() wt_id=() wt_epoch=() wt_moved=()
+  # --- pre-pass: gather sessions and work out whose they really are ---------
+  # Every session is described once, in flat parallel arrays (bash 3.2 here
+  # and on CI, so no associative arrays): where its transcript is stored, and
+  # which checkout it belongs to. The two differ whenever a session was
+  # launched in one directory and did its work in a worktree.
+  #
+  # Reading a folder's SESS_READ newest transcripts measures ~57ms; reading
+  # every one of them ~620ms, too slow for a board that should feel instant.
+  # A session older than a folder's SESS_READ newest is not offered.
+  SESS_READ=8
+  SESS_SHOW=3
+
+  sess_id=() sess_when=() sess_title=() sess_owner=() sess_home=()
   for ((i = 0; i < ${#paths[@]}; i++)); do
     d=$(session_dir "${paths[$i]}")
-    f=$(/bin/ls -t "$d" 2>/dev/null | grep '\.jsonl$' | head -1)
-    wt_sdir+=("$d")
-    wt_newest+=("$f")
-    wt_id+=("${f%.jsonl}")
-    if [ -n "$f" ]; then wt_epoch+=("$(mtime_epoch "$d/$f")"); else wt_epoch+=("0"); fi
-    wt_moved+=("-1")
-  done
-  for ((i = 0; i < ${#paths[@]}; i++)); do
-    [ -n "${wt_id[$i]}" ] || continue
-    for ((j = 0; j < ${#paths[@]}; j++)); do
-      [ "$j" != "$i" ] || continue
-      [ "${wt_id[$j]}" = "${wt_id[$i]}" ] || continue
-      [ "${wt_epoch[$j]}" -gt "${wt_epoch[$i]}" ] || continue
-      wt_moved[$i]=$j
-    done
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      t=$(grep -m1 -o '"aiTitle":"[^"]*"' "$d/$f" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
+      [ -n "$t" ] || t="(untitled)"
+      sess_id+=("${f%.jsonl}")
+      sess_when+=("$(mtime_epoch "$d/$f")")
+      sess_title+=("$t")
+      sess_owner+=("$i")
+      sess_home+=("$(checkout_of "$(session_worktree "$d/$f")" "$i")")
+    done < <(/bin/ls -t "$d" 2>/dev/null | grep '\.jsonl$' | head -"$SESS_READ")
   done
 
   for ((i = 0; i < ${#paths[@]}; i++)); do
@@ -364,7 +408,16 @@ except Exception:
     # --- plan TODO progress ---
     todo="-" next="-" todocolor="$C_DIM"
     if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
+      # The documented name is `docs/plan/<branch>.md`, but a branch carries
+      # characters a filename usually does not: Claude Code's own worktrees
+      # produce branches like `worktree-fix+mobile-keyboard-and-touch`, whose
+      # plan gets written with the `+` flattened. Try the exact name, then the
+      # flattened one, before falling back to "there is only one plan here".
       plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
+      if [ ! -f "$plan" ]; then
+        flat="$p/docs/plan/$(printf '%s' "$b" | sed 's/[^A-Za-z0-9._-]/-/g').md"
+        [ -f "$flat" ] && plan="$flat"
+      fi
       if [ ! -f "$plan" ]; then
         cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
         [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"
@@ -382,34 +435,20 @@ except Exception:
     fi
 
     # --- saved sessions (durable; survives reboot) ---
-    sdir=${wt_sdir[$i]}
-    newest=${wt_newest[$i]}
-    count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
-    sess="none — fresh" sess_epoch=0
-    if [ "${wt_moved[$i]}" != "-1" ]; then
-      # This row's newest transcript is the earlier home of a session that
-      # now lives elsewhere. Say so, and offer a fresh session rather than a
-      # resume that would reopen it in the wrong directory.
-      movedto=$(basename "${paths[${wt_moved[$i]}]}")
-      sess="${C_DIM}moved to $(trunc "$movedto" 24)${C_RESET}"
-      resume_lines+=("0|cd $p && claude    # $b — session moved to $movedto")
-      resume_menu+=("0|$(basename "$p")    ${C_DIM}session moved to $(trunc "$movedto" 24)${C_RESET}")
-      resume_paths+=("$p")
-      resume_hassess+=("0")
-    elif [ -n "$newest" ]; then
-      sess_epoch=${wt_epoch[$i]}
-      title=$(grep -m1 -o '"aiTitle":"[^"]*"' "$sdir/$newest" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
-      [ -n "$title" ] || title="(untitled)"
-      sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
-      resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
-      resume_menu+=("$sess_epoch|$(basename "$p")    $(rel_age "$sess_epoch") · $(trunc "$title" 34)")
-      resume_paths+=("$p")
-      resume_hassess+=("1")
-    else
-      resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
-      resume_menu+=("0|$(basename "$p")    no saved session — starts fresh")
-      resume_paths+=("$p")
-      resume_hassess+=("0")
+    # The newest session ATTRIBUTED to this checkout, which is not always one
+    # stored in its own folder — so this column and the grouped resume list
+    # below always tell the same story.
+    sess="none — fresh" last_epoch=0
+    newest_idx=-1
+    for ((k = 0; k < ${#sess_id[@]}; k++)); do
+      [ "${sess_home[$k]}" = "$i" ] || continue
+      if [ "$newest_idx" = "-1" ] || [ "${sess_when[$k]}" -gt "${sess_when[$newest_idx]}" ]; then
+        newest_idx=$k
+      fi
+    done
+    if [ "$newest_idx" != "-1" ]; then
+      last_epoch=${sess_when[$newest_idx]}
+      sess="$(rel_age "$last_epoch") · $(trunc "${sess_title[$newest_idx]}" 34)"
     fi
     is_running "$p" && sess="$sess ${C_GREEN}● running${C_RESET}"
 
@@ -445,7 +484,7 @@ except Exception:
     if [ "$b" = "(detached)" ]; then
       anomalies+=("$(basename "$p") — detached HEAD: no branch/plan mapping")
     fi
-    if [ "$b" != "$base" ] && [ "$commit_epoch" -lt $((now - 604800)) ] && [ "$sess_epoch" -lt $((now - 604800)) ]; then
+    if [ "$b" != "$base" ] && [ "$commit_epoch" -lt $((now - 604800)) ] && [ "$last_epoch" -lt $((now - 604800)) ]; then
       anomalies+=("$b — stale: no commits or sessions in 7+ days — abandoned?")
     fi
   done
@@ -462,37 +501,79 @@ except Exception:
     done
   fi
 
-  # Sort resume rows by epoch (most recent first), same ordering the old
-  # print pipeline produced, but keep it indexable: order[] holds the
-  # original resume_lines/resume_paths/resume_hassess index for each
-  # position, so the picker below can act on a plain 1-based number.
-  order=()
-  while IFS= read -r idx; do order+=("$idx"); done < <(
-    for ((i = 0; i < ${#resume_lines[@]}; i++)); do
-      printf '%s\t%d\n' "${resume_lines[$i]%%|*}" "$i"
-    done | sort -t $'\t' -k1,1rn | cut -f2
+  # Resume list: sessions, grouped under the checkout they belong to. Groups
+  # are ordered by their newest session, so the checkout you touched last is
+  # on top — but a base checkout's long backlog can never push a worktree off
+  # the list, which is what a flat time-ordered list would do. Checkouts with
+  # no sessions sort last, on a newest of 0.
+  group_order=()
+  while IFS= read -r line; do group_order+=("${line#*	}"); done < <(
+    for ((i = 0; i < ${#paths[@]}; i++)); do
+      newest=0
+      for ((k = 0; k < ${#sess_id[@]}; k++)); do
+        [ "${sess_home[$k]}" = "$i" ] || continue
+        [ "${sess_when[$k]}" -gt "$newest" ] && newest=${sess_when[$k]}
+      done
+      printf '%d\t%d\n' "$newest" "$i"
+    done | sort -t $'\t' -k1,1nr -k2,2n
   )
 
-  resume_count=${#order[@]}
+  # One flat, continuously numbered list so the picker still acts on a plain
+  # number; resume_head carries the heading to print before a row, if any.
+  resume_paths=() resume_ids=() resume_head=() resume_row=()
+  for gi in "${group_order[@]}"; do
+    gp=${paths[$gi]}
+    head=${branches[$gi]}
+    [ "$head" = "(detached)" ] && head=$(basename "$gp")
+
+    picked=()
+    while IFS= read -r line; do picked+=("${line#*	}"); done < <(
+      for ((k = 0; k < ${#sess_id[@]}; k++)); do
+        [ "${sess_home[$k]}" = "$gi" ] || continue
+        printf '%d\t%d\n' "${sess_when[$k]}" "$k"
+      done | sort -t $'\t' -k1,1nr -k2,2n | head -"$SESS_SHOW"
+    )
+
+    if [ "${#picked[@]}" -eq 0 ]; then
+      resume_paths+=("$gp")
+      resume_ids+=("")
+      resume_head+=("$head")
+      if [ "$will_prompt" = "1" ]; then
+        resume_row+=("${C_DIM}no saved session — starts fresh${C_RESET}")
+      else
+        resume_row+=("cd $gp && claude    # no saved session — starts fresh")
+      fi
+      continue
+    fi
+
+    for k in "${picked[@]}"; do
+      # Only worth saying when the transcript is stored somewhere else: this
+      # is the session that looked like it belonged to another checkout.
+      from=""
+      [ "${sess_owner[$k]}" != "$gi" ] && from="started from $(basename "${paths[${sess_owner[$k]}]}")"
+      resume_paths+=("$gp")
+      resume_ids+=("${sess_id[$k]}")
+      resume_head+=("$head")
+      if [ "$will_prompt" = "1" ]; then
+        printf -v row '%4s  %s' "$(rel_age "${sess_when[$k]}")" "$(trunc "${sess_title[$k]}" 34)"
+        [ -n "$from" ] && row="$row    ${C_DIM}${from}${C_RESET}"
+      else
+        row="cd $gp && claude --resume ${sess_id[$k]}    # $(rel_age "${sess_when[$k]}") · ${sess_title[$k]}"
+        [ -n "$from" ] && row="$row — $from"
+      fi
+      resume_row+=("$row")
+      head=""
+    done
+  done
+
+  resume_count=${#resume_paths[@]}
   width=${#resume_count}
-  resume_sorted_paths=()
-  resume_sorted_hassess=()
-  # Interactive: the picker acts on the number, so a full path is noise —
-  # show the worktree name. Non-interactive: the line has to be runnable,
-  # so keep the copy-paste `cd ... && claude` form.
-  if [ "$will_prompt" = "1" ]; then rows=("${resume_menu[@]}"); else rows=("${resume_lines[@]}"); fi
   printf '\n%sResume (most recent first):%s\n' "$C_BOLD" "$C_RESET"
-  n=0
-  for idx in "${order[@]}"; do
-    n=$((n + 1))
-    resume_sorted_paths+=("${resume_paths[$idx]}")
-    resume_sorted_hassess+=("${resume_hassess[$idx]}")
-    rowcolor=""
-    [ "${resume_hassess[$idx]}" = "0" ] && rowcolor="$C_DIM"
-    printf -v numpad '%*d' "$width" "$n"
-    printf '  %s%s%s%s  %s%s%s\n' \
-      "$C_BOLD" "$C_CYAN" "$numpad" "$C_RESET" \
-      "$rowcolor" "${rows[$idx]#*|}" "$C_RESET"
+  for ((n = 0; n < resume_count; n++)); do
+    [ -n "${resume_head[$n]}" ] && printf '  %s%s%s\n' "$C_BOLD" "${resume_head[$n]}" "$C_RESET"
+    printf -v numpad '%*d' "$width" "$((n + 1))"
+    printf '    %s%s%s%s  %s\n' \
+      "$C_BOLD" "$C_CYAN" "$numpad" "$C_RESET" "${resume_row[$n]}"
   done
 
   # Interactive picker: only when it is safe to prompt — a real terminal on
@@ -537,9 +618,24 @@ except Exception:
 }
 
 cmd_env() {
+  # The agent sandbox comes first, before any early exit. scratchpad/ is
+  # gitignored, so git never carries it into a new worktree, and nothing else
+  # creates it — `se baseline` only does so as a side effect of writing its
+  # report. A worktree that never runs a baseline had nowhere in-tree to put
+  # intermediate files, which is how agents end up littering /tmp instead.
+  if [ -d "$root/scratchpad" ]; then
+    echo "scratchpad/: already present"
+  else
+    mkdir -p "$root/scratchpad"
+    echo "scratchpad/: created"
+  fi
+  if ! git -C "$root" check-ignore -q scratchpad 2>/dev/null; then
+    echo "scratchpad/: NOT gitignored — add it to .gitignore, or its contents will show up as changes" >&2
+  fi
+
   wt_json="$root/docs/architecture/worktree.json"
   if [ ! -f "$wt_json" ]; then
-    echo "no docs/architecture/worktree.json — nothing to do"
+    echo "no docs/architecture/worktree.json — nothing else to do"
     exit 0
   fi
 

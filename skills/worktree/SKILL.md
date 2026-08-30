@@ -128,8 +128,10 @@ Immediately after setup, **before any code changes**:
 
 ## 4. Start the plan
 
-Create `docs/plan/<branch-name>.md` using the plan skill. One plan file per
-worktree — that is all `docs/plan/` ever contains. The plan ends with its
+Create `docs/plan/<branch-name>.md` using the plan skill, replacing every
+character outside `[A-Za-z0-9._-]` in the branch name with `-` (native
+worktree branches carry a `+`). One plan file per worktree — that is all
+`docs/plan/` ever contains. The plan ends with its
 `## TODO` checklist; **implementation starts only after the checklist
 exists and the user has approved the plan** — the checklist existing is not
 the approval. Items get checked off as steps complete.
