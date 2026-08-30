@@ -252,6 +252,8 @@ staff-engineer-plugin/
 - **Agents**: `model:` and `tools:` live in each agent's frontmatter —
   builders and the explainer run Sonnet; flip to Haiku for cheaper runs.
 - **Tests**: `bash tests/run.sh` before a PR — the same 48 checks CI runs.
+- **Color**: `SE_COLOR=auto|always|never` (default `auto`: color only on a
+  tty); `NO_COLOR` is respected.
 
 ## Credits
 

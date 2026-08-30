@@ -7,6 +7,11 @@
 #
 # usage: se [status|env|baseline|teardown <name>|debt|help]
 #
+#   SE_COLOR=auto|always|never
+#                     color the output; auto (default) colors only when
+#                     stdout is a tty and NO_COLOR is unset; always/never
+#                     force it on or off.
+#
 #   status            status board (default): worktrees, TODO progress,
 #                     resume commands, anomalies. The resume list is a
 #                     numbered menu; when stdin+stdout are both a tty it
@@ -31,7 +36,7 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -39,6 +44,24 @@ case "${1:-status}" in
     exit 2
     ;;
 esac
+
+# Color: SE_COLOR=auto (default) emits SGR only when stdout is a tty and
+# NO_COLOR (https://no-color.org) is unset/empty; always/never force it on
+# or off. Defined once as either the escape sequence or the empty string, so
+# every call site is unconditional — "$C_GREEN$text$C_RESET" prints plain
+# text when color is off. Portable 16-color SGR only (no 256-color/
+# truecolor), so the terminal theme picks the exact shade.
+case "${SE_COLOR:-auto}" in
+  always) use_color=1 ;;
+  never)  use_color=0 ;;
+  *)      if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then use_color=1; else use_color=0; fi ;;
+esac
+if [ "$use_color" = "1" ]; then
+  C_RESET=$'\033[0m'  C_BOLD=$'\033[1m'   C_DIM=$'\033[2m'
+  C_RED=$'\033[31m'   C_GREEN=$'\033[32m' C_YELLOW=$'\033[33m' C_CYAN=$'\033[36m'
+else
+  C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN='' C_YELLOW='' C_CYAN=''
+fi
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   echo "se: not inside a git repository" >&2
@@ -278,8 +301,10 @@ except Exception:
   fi
   is_running() { printf '%s\n' "$running_cwds" | grep -qFx "$1"; }
 
-  printf 'se · repo: %s · base: %s · %d worktree(s)\n\n' "$(basename "$root")" "$base" "${#paths[@]}"
-  printf '%-26s %-14s %-6s %-32s %s\n' "BRANCH" "GIT" "TODO" "NEXT STEP" "LAST SESSION"
+  printf '%sse · repo: %s · base: %s · %d worktree(s)%s\n\n' \
+    "$C_BOLD" "$(basename "$root")" "$base" "${#paths[@]}" "$C_RESET"
+  printf -v hdrrow '%-26s %-14s %-6s %-32s %s' "BRANCH" "GIT" "TODO" "NEXT STEP" "LAST SESSION"
+  printf '%s%s%s\n' "$C_DIM" "$hdrrow" "$C_RESET"
 
   anomalies=()
   resume_lines=()
@@ -297,8 +322,8 @@ except Exception:
 
     # --- git state ---
     dirty=$(git -C "$p" status --porcelain 2>/dev/null | grep -c .)
-    gitcol="clean"
-    [ "$dirty" -gt 0 ] && gitcol="dirty:$dirty"
+    gitcol="clean" gitcolor="$C_GREEN"
+    [ "$dirty" -gt 0 ] && gitcol="dirty:$dirty" && gitcolor="$C_YELLOW"
     ab=$(git -C "$p" rev-list --left-right --count "$baseref...HEAD" 2>/dev/null)
     behind=${ab%%	*} ahead=${ab##*	}
     [ "${ahead:-0}" -gt 0 ] 2>/dev/null && gitcol="$gitcol +$ahead"
@@ -306,7 +331,7 @@ except Exception:
     commit_epoch=$(git -C "$p" log -1 --format=%ct 2>/dev/null || echo 0)
 
     # --- plan TODO progress ---
-    todo="-" next="-"
+    todo="-" next="-" todocolor="$C_DIM"
     if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
       plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
       if [ ! -f "$plan" ]; then
@@ -317,6 +342,7 @@ except Exception:
         done_n=$(grep -cE '^[[:space:]]*- \[x\]' "$plan")
         open_n=$(grep -cE '^[[:space:]]*- \[ \]' "$plan")
         todo="$done_n/$((done_n + open_n))"
+        if [ "$done_n" -eq "$((done_n + open_n))" ]; then todocolor="$C_GREEN"; else todocolor="$C_YELLOW"; fi
         next=$(grep -m1 -E '^[[:space:]]*- \[ \]' "$plan" | sed -E 's/^[[:space:]]*- \[ \] *//')
         [ -n "$next" ] || next="all done"
       else
@@ -344,10 +370,19 @@ except Exception:
       resume_paths+=("$p")
       resume_hassess+=("0")
     fi
-    is_running "$p" && sess="$sess ● running"
+    is_running "$p" && sess="$sess ${C_GREEN}● running${C_RESET}"
 
-    printf '%-26s %-14s %-6s %-32s %s\n' \
-      "$(trunc "$b" 26)" "$gitcol" "$todo" "$(trunc "$next" 32)" "$sess"
+    # Pad first, then colorize: printf pads by bytes, so wrapping a value in
+    # escape codes before padding would silently break the table.
+    printf -v branchpad '%-26s' "$(trunc "$b" 26)"
+    printf -v gitpad '%-14s' "$gitcol"
+    printf -v todopad '%-6s' "$todo"
+    printf -v nextpad '%-32s' "$(trunc "$next" 32)"
+    printf '%s %s%s%s %s%s%s %s %s\n' \
+      "$branchpad" \
+      "$gitcolor" "$gitpad" "$C_RESET" \
+      "$todocolor" "$todopad" "$C_RESET" \
+      "$nextpad" "$sess"
 
     # --- anomalies ---
     # "Merged" needs care: a freshly created branch's tip is reachable from
@@ -375,8 +410,15 @@ except Exception:
   done
 
   if [ "${#anomalies[@]}" -gt 0 ]; then
-    printf '\nAnomalies:\n'
-    for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
+    printf '\n%sAnomalies:%s\n' "$C_BOLD" "$C_RESET"
+    for ((i = 0; i < ${#anomalies[@]}; i++)); do
+      # Red for anything about losing work, yellow for every other anomaly.
+      acolor="$C_YELLOW"
+      case "${anomalies[$i]}" in
+        *"uncommitted file(s)"*) acolor="$C_RED" ;;
+      esac
+      printf '  %s! %s%s\n' "$acolor" "${anomalies[$i]}" "$C_RESET"
+    done
   fi
 
   # Sort resume rows by epoch (most recent first), same ordering the old
@@ -398,13 +440,18 @@ except Exception:
   # show the worktree name. Non-interactive: the line has to be runnable,
   # so keep the copy-paste `cd ... && claude` form.
   if [ "$will_prompt" = "1" ]; then rows=("${resume_menu[@]}"); else rows=("${resume_lines[@]}"); fi
-  printf '\nResume (most recent first):\n'
+  printf '\n%sResume (most recent first):%s\n' "$C_BOLD" "$C_RESET"
   n=0
   for idx in "${order[@]}"; do
     n=$((n + 1))
     resume_sorted_paths+=("${resume_paths[$idx]}")
     resume_sorted_hassess+=("${resume_hassess[$idx]}")
-    printf '  %*d  %s\n' "$width" "$n" "${rows[$idx]#*|}"
+    rowcolor=""
+    [ "${resume_hassess[$idx]}" = "0" ] && rowcolor="$C_DIM"
+    printf -v numpad '%*d' "$width" "$n"
+    printf '  %s%s%s%s  %s%s%s\n' \
+      "$C_BOLD" "$C_CYAN" "$numpad" "$C_RESET" \
+      "$rowcolor" "${rows[$idx]#*|}" "$C_RESET"
   done
 
   # Interactive picker: only when it is safe to prompt — a real terminal on
@@ -414,7 +461,8 @@ except Exception:
   if [ "$will_prompt" = "1" ] && [ "$resume_count" -gt 0 ]; then
     printf '\n'
     while :; do
-      printf 'Join [1-%d], n<%d> for a new session, q to quit: ' "$resume_count" "$resume_count"
+      printf -v promptline 'Join [1-%d], n<%d> for a new session, q to quit: ' "$resume_count" "$resume_count"
+      printf '%s%s%s' "$C_BOLD" "$promptline" "$C_RESET"
       IFS= read -r choice || exit 0
       case "$choice" in
         ''|q|Q) exit 0 ;;
@@ -475,15 +523,15 @@ cmd_env() {
     [ "$kind" = "path" ] || continue
     [ -n "$value" ] || continue
     if [ -e "$root/$value" ]; then
-      echo "copy $value: already present"
+      printf '%scopy %s: already present%s\n' "$C_DIM" "$value" "$C_RESET"
     elif [ -e "$main/$value" ]; then
       cp -p "$main/$value" "$root/$value"
-      echo "copy $value: done"
+      printf '%scopy %s: done%s\n' "$C_GREEN" "$value" "$C_RESET"
     elif [ "$required" = "1" ]; then
-      echo "copy $value: missing in main (required)" >&2
+      printf '%scopy %s: missing in main (required)%s\n' "$C_YELLOW" "$value" "$C_RESET" >&2
       exit 1
     else
-      echo "copy $value: missing in main"
+      printf '%scopy %s: missing in main%s\n' "$C_YELLOW" "$value" "$C_RESET"
     fi
   done < <(printf '%s\n' "$copy_records")
 
@@ -494,15 +542,15 @@ cmd_env() {
     [ "$kind" = "path" ] || continue
     [ -n "$value" ] || continue
     if [ -e "$root/$value" ] || [ -L "$root/$value" ]; then
-      echo "symlink $value: already present"
+      printf '%ssymlink %s: already present%s\n' "$C_DIM" "$value" "$C_RESET"
     elif [ -e "$main/$value" ]; then
       ln -s "$main/$value" "$root/$value"
-      echo "symlink $value: done"
+      printf '%ssymlink %s: done%s\n' "$C_GREEN" "$value" "$C_RESET"
     elif [ "$required" = "1" ]; then
-      echo "symlink $value: missing in main (required)" >&2
+      printf '%ssymlink %s: missing in main (required)%s\n' "$C_YELLOW" "$value" "$C_RESET" >&2
       exit 1
     else
-      echo "symlink $value: missing in main"
+      printf '%ssymlink %s: missing in main%s\n' "$C_YELLOW" "$value" "$C_RESET"
     fi
   done < <(printf '%s\n' "$symlink_records")
 
@@ -521,10 +569,10 @@ cmd_env() {
     fi
     out=$(cd "$root" && sh -c "$value" </dev/null 2>&1); cmdrc=$?
     if [ "$cmdrc" -eq 0 ]; then
-      echo "postCreate '$value': ok"
+      printf '%spostCreate '"'"'%s'"'"': ok%s\n' "$C_GREEN" "$value" "$C_RESET"
     else
       printf '%s\n' "$out" | tail -20
-      echo "postCreate '$value': failed (exit $cmdrc)" >&2
+      printf '%spostCreate '"'"'%s'"'"': failed (exit %d)%s\n' "$C_RED" "$value" "$cmdrc" "$C_RESET" >&2
       [ -n "$why" ] && echo "why: $why" >&2
       exit 1
     fi
@@ -584,10 +632,10 @@ EOF
     dur=$(( $(date +%s) - start ))
     tail_out=$(printf '%s\n' "$out" | tail -5)
     if [ "$cmdrc" -eq 0 ]; then
-      echo "PASS $value (${dur}s)"
+      printf '%sPASS %s (%ss)%s\n' "$C_GREEN" "$value" "$dur" "$C_RESET"
       { printf '\n## %s\n\nStatus: PASS\n' "$value"; } >> "$out_md"
     else
-      echo "FAIL $value (exit $cmdrc, ${dur}s)"
+      printf '%sFAIL %s (exit %d, %ss)%s\n' "$C_RED" "$value" "$cmdrc" "$dur" "$C_RESET"
       [ -n "$why" ] && echo "why: $why"
       { printf '\n## %s\n\nStatus: FAIL (exit %d)\n' "$value" "$cmdrc"; } >> "$out_md"
       [ -n "$why" ] && { printf 'Why: %s\n' "$why"; } >> "$out_md"
@@ -602,7 +650,7 @@ EOF
 cmd_teardown() {
   name=${1:-}
   if [ -z "$name" ]; then
-    echo "se teardown: usage: se teardown <name>" >&2
+    printf '%sse teardown: usage: se teardown <name>%s\n' "$C_RED" "$C_RESET" >&2
     exit 1
   fi
 
@@ -613,27 +661,27 @@ cmd_teardown() {
     [ "${paths[$i]}" = "$target" ] && registered="yes" && branch=${branches[$i]}
   done
   if [ -z "$registered" ]; then
-    echo "se teardown: $target is not a registered worktree (see: git worktree list)" >&2
+    printf '%sse teardown: %s is not a registered worktree (see: git worktree list)%s\n' "$C_RED" "$target" "$C_RESET" >&2
     exit 1
   fi
 
   cwd=$(pwd -P 2>/dev/null || pwd)
   case "$cwd" in
     "$target"|"$target"/*)
-      echo "se teardown: refusing — the current directory is inside $target; cd out first" >&2
+      printf '%sse teardown: refusing — the current directory is inside %s; cd out first%s\n' "$C_RED" "$target" "$C_RESET" >&2
       exit 1
       ;;
   esac
 
   dirty=$(git -C "$target" status --porcelain 2>/dev/null)
   if [ -n "$dirty" ]; then
-    echo "se teardown: $target has uncommitted changes — refusing:" >&2
+    printf '%sse teardown: %s has uncommitted changes — refusing:%s\n' "$C_RED" "$target" "$C_RESET" >&2
     printf '%s\n' "$dirty" | sed 's/^/  /' >&2
     exit 1
   fi
 
   if [ "$branch" = "(detached)" ] || ! is_branch_merged "$branch"; then
-    echo "se teardown: branch '$branch' is not merged into $base — refusing" >&2
+    printf '%sse teardown: branch '"'"'%s'"'"' is not merged into %s — refusing%s\n' "$C_RED" "$branch" "$base" "$C_RESET" >&2
     exit 1
   fi
 
@@ -659,7 +707,8 @@ cmd_teardown() {
     done < <(printf '%s\n' "$copy_records")
   fi
   if [ "${#copy_hits[@]}" -gt 0 ]; then
-    echo "se teardown: $target has config-declared files not safely replaceable from main — refusing:" >&2
+    printf '%sse teardown: %s has config-declared files not safely replaceable from main — refusing:%s\n' \
+      "$C_RED" "$target" "$C_RESET" >&2
     for ((i = 0; i < ${#copy_hits[@]}; i++)); do printf '  %s\n' "${copy_hits[$i]}" >&2; done
     echo "back these up (or delete them from the worktree if disposable), then re-run — se teardown never deletes them for you." >&2
     exit 1
@@ -677,7 +726,8 @@ cmd_teardown() {
     ignored_hits+=("$rel")
   done < <(git -C "$target" ls-files --others --ignored --exclude-standard 2>/dev/null)
   if [ "${#ignored_hits[@]}" -gt 0 ]; then
-    echo "se teardown: $target has unique gitignored files with no git history — refusing:" >&2
+    printf '%sse teardown: %s has unique gitignored files with no git history — refusing:%s\n' \
+      "$C_RED" "$target" "$C_RESET" >&2
     for ((i = 0; i < ${#ignored_hits[@]}; i++)); do printf '  %s\n' "${ignored_hits[$i]}" >&2; done
     echo "back these up (or delete them from the worktree if disposable), then re-run — se teardown never deletes them for you." >&2
     exit 1
@@ -692,7 +742,7 @@ cmd_teardown() {
     while IFS=$'\t' read -r kind value why required; do
       [ -n "$value" ] || continue
       if [ "$kind" = "check" ]; then
-        [ -n "$checks_printed" ] || { echo "manual checks (not run):"; checks_printed=1; }
+        [ -n "$checks_printed" ] || { printf '%smanual checks (not run):%s\n' "$C_YELLOW" "$C_RESET"; checks_printed=1; }
         if [ -n "$why" ]; then echo "  - $value ($why)"; else echo "  - $value"; fi
         continue
       fi
@@ -701,7 +751,7 @@ cmd_teardown() {
         echo "preDelete '$value': ok"
       else
         printf '%s\n' "$out" | tail -20
-        echo "preDelete '$value': failed (exit $cmdrc)" >&2
+        printf '%spreDelete '"'"'%s'"'"': failed (exit %d)%s\n' "$C_RED" "$value" "$cmdrc" "$C_RESET" >&2
         [ -n "$why" ] && echo "why: $why" >&2
         exit 1
       fi
@@ -709,19 +759,19 @@ cmd_teardown() {
   fi
 
   if ! git -C "$main_checkout" worktree remove "$target"; then
-    echo "se teardown: git worktree remove failed for $target" >&2
+    printf '%sse teardown: git worktree remove failed for %s%s\n' "$C_RED" "$target" "$C_RESET" >&2
     exit 1
   fi
-  echo "worktree removed: $target"
+  printf '%sworktree removed: %s%s\n' "$C_GREEN" "$target" "$C_RESET"
 
   if ! git -C "$main_checkout" branch -d "$branch"; then
-    echo "se teardown: git branch -d failed for $branch" >&2
+    printf '%sse teardown: git branch -d failed for %s%s\n' "$C_RED" "$branch" "$C_RESET" >&2
     exit 1
   fi
-  echo "branch deleted: $branch"
+  printf '%sbranch deleted: %s%s\n' "$C_GREEN" "$branch" "$C_RESET"
 
   git -C "$main_checkout" worktree prune
-  echo "worktree pruned"
+  printf '%sworktree pruned%s\n' "$C_GREEN" "$C_RESET"
 
   exit 0
 }
@@ -745,7 +795,7 @@ cmd_debt() {
     suffix=""
     case "$marker" in
       *,*) : ;;
-      *) suffix=" [no-trigger]"; no_trigger=$((no_trigger + 1)) ;;
+      *) suffix=" ${C_YELLOW}[no-trigger]${C_RESET}"; no_trigger=$((no_trigger + 1)) ;;
     esac
     printf '%s:%s  %s%s\n' "$file" "$lineno" "$marker" "$suffix"
   done < <(cd "$root" && grep -rnEI \
@@ -755,9 +805,9 @@ cmd_debt() {
     "$pattern" . 2>/dev/null)
 
   if [ "$total" -eq 0 ]; then
-    echo "No se-debt markers. Clean ledger."
+    printf '%sNo se-debt markers. Clean ledger.%s\n' "$C_GREEN" "$C_RESET"
   else
-    printf '\n%d markers, %d without trigger.\n' "$total" "$no_trigger"
+    printf '\n%s%d markers, %d without trigger.%s\n' "$C_BOLD" "$total" "$no_trigger" "$C_RESET"
   fi
 
   exit 0
