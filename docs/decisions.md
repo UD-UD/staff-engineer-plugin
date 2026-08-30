@@ -80,6 +80,27 @@ bounded by the read depth would understate. `--continue` left every printed
 command, because a row's session is not necessarily the newest transcript in
 the directory it launches in.
 
+## 2026-08-30 — `se env` creates the scratchpad sandbox
+
+**Decided.** `se env` creates `scratchpad/` before it looks for
+`worktree.json`, and warns when the directory is not gitignored.
+
+**Why.** `scratchpad/` is gitignored, so git never carries it into a new
+worktree, and nothing created it deliberately: `se:setup` does it once per
+repo, and `se baseline` only as a side effect of writing its report. A
+worktree that never ran a baseline had no in-tree sandbox, so agents wrote
+intermediate files to `/tmp` instead — which is what happened while building
+this branch. `se env` already runs for every new worktree and means "set up
+this checkout", so it is the natural home.
+
+**Rejected — telling the worktree skill to create it.** Creating a directory
+is mechanical, and mechanical work belongs in the script, where it always
+happens, rather than in prose an agent may or may not follow.
+
+**Also.** The help text now derives its own end instead of using a hardcoded
+line range, which truncated the output twice while writing this branch —
+silently, because it simply prints fewer lines.
+
 ## 2026-08-30 — Plan filenames flatten the branch name
 
 **Decided.** The plan file is `docs/plan/<branch>.md` with every character
