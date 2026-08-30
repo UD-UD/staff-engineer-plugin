@@ -364,7 +364,16 @@ except Exception:
     # --- plan TODO progress ---
     todo="-" next="-" todocolor="$C_DIM"
     if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
+      # The documented name is `docs/plan/<branch>.md`, but a branch carries
+      # characters a filename usually does not: Claude Code's own worktrees
+      # produce branches like `worktree-fix+mobile-keyboard-and-touch`, whose
+      # plan gets written with the `+` flattened. Try the exact name, then the
+      # flattened one, before falling back to "there is only one plan here".
       plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
+      if [ ! -f "$plan" ]; then
+        flat="$p/docs/plan/$(printf '%s' "$b" | sed 's/[^A-Za-z0-9._-]/-/g').md"
+        [ -f "$flat" ] && plan="$flat"
+      fi
       if [ ! -f "$plan" ]; then
         cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
         [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"

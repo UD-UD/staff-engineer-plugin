@@ -148,6 +148,28 @@ git -C "$main" worktree remove "$plusfeat"
 git -C "$main" branch -D feat-plus >/dev/null 2>&1
 rm -rf "$plushome"
 
+# --- plan lookup: branch names contain characters the filename does not -----
+# Claude Code's own worktrees produce branches like `worktree-fix+mobile`, but
+# the plan file on disk has the `+` flattened. Looking only for the exact
+# branch name misses a plan that is right there, and raises a false anomaly.
+planhome=$(mktemp -d)
+plusfeat2="$main/.claude/worktrees/feat+plus2"
+git -C "$main" worktree add -q -b "feat+plus2" "$plusfeat2" main
+mkdir -p "$plusfeat2/docs/plan"
+printf '# plan\n\n## TODO\n- [x] 1. already done\n- [ ] 2. flattened plan step\n' \
+  > "$plusfeat2/docs/plan/feat-plus2.md"
+
+out=$(cd "$main" && HOME="$planhome" SE_NO_PROMPT=1 "$se")
+assert_contains "plan found when the branch name flattens to the filename" \
+  "$out" "flattened plan step"
+assert_contains "its TODO progress is counted" "$out" "1/2"
+assert_not_contains "no false missing-plan anomaly for a + branch" \
+  "$out" "feat+plus2 — no plan file"
+
+git -C "$main" worktree remove "$plusfeat2"
+git -C "$main" branch -D "feat+plus2" >/dev/null 2>&1
+rm -rf "$planhome"
+
 # --- one session, two homes -------------------------------------------------
 # Entering a worktree leaves a transcript in the launch directory AND writes
 # one under the worktree, both with the same session id. Without detection the
