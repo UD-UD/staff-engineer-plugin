@@ -293,6 +293,10 @@ cmd_status() {
 import json, sys
 try:
     for a in json.load(sys.stdin):
+        # Only interactive sessions count as "running": background agents
+        # report the directory they were launched from and are often blocked
+        # leftovers, so counting them marks checkouts nobody is sitting in.
+        if a.get("kind", "interactive") == "background": continue
         c = a.get("cwd")
         if c: print(c)
 except Exception:
@@ -316,6 +320,33 @@ except Exception:
   # whether the picker runs. A real terminal on both ends, not suppressed.
   will_prompt=0
   if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ]; then will_prompt=1; fi
+
+  # --- pre-pass: whose session is it, really? -------------------------------
+  # A session that starts in one directory and then enters a worktree leaves a
+  # transcript in BOTH project folders under the same session id. Without this
+  # pass one live session shows up as two resumable rows, and joining the
+  # launch-directory row would continue it rooted in the wrong checkout.
+  # The row whose copy was written most recently is where the session now
+  # lives; the other row is told so instead of offering a stale resume.
+  wt_sdir=() wt_newest=() wt_id=() wt_epoch=() wt_moved=()
+  for ((i = 0; i < ${#paths[@]}; i++)); do
+    d=$(session_dir "${paths[$i]}")
+    f=$(/bin/ls -t "$d" 2>/dev/null | grep '\.jsonl$' | head -1)
+    wt_sdir+=("$d")
+    wt_newest+=("$f")
+    wt_id+=("${f%.jsonl}")
+    if [ -n "$f" ]; then wt_epoch+=("$(mtime_epoch "$d/$f")"); else wt_epoch+=("0"); fi
+    wt_moved+=("-1")
+  done
+  for ((i = 0; i < ${#paths[@]}; i++)); do
+    [ -n "${wt_id[$i]}" ] || continue
+    for ((j = 0; j < ${#paths[@]}; j++)); do
+      [ "$j" != "$i" ] || continue
+      [ "${wt_id[$j]}" = "${wt_id[$i]}" ] || continue
+      [ "${wt_epoch[$j]}" -gt "${wt_epoch[$i]}" ] || continue
+      wt_moved[$i]=$j
+    done
+  done
 
   for ((i = 0; i < ${#paths[@]}; i++)); do
     p=${paths[$i]} b=${branches[$i]}
@@ -351,12 +382,22 @@ except Exception:
     fi
 
     # --- saved sessions (durable; survives reboot) ---
-    sdir=$(session_dir "$p")
-    newest=$(/bin/ls -t "$sdir" 2>/dev/null | grep '\.jsonl$' | head -1)
+    sdir=${wt_sdir[$i]}
+    newest=${wt_newest[$i]}
     count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
     sess="none — fresh" sess_epoch=0
-    if [ -n "$newest" ]; then
-      sess_epoch=$(mtime_epoch "$sdir/$newest")
+    if [ "${wt_moved[$i]}" != "-1" ]; then
+      # This row's newest transcript is the earlier home of a session that
+      # now lives elsewhere. Say so, and offer a fresh session rather than a
+      # resume that would reopen it in the wrong directory.
+      movedto=$(basename "${paths[${wt_moved[$i]}]}")
+      sess="${C_DIM}moved to $(trunc "$movedto" 24)${C_RESET}"
+      resume_lines+=("0|cd $p && claude    # $b — session moved to $movedto")
+      resume_menu+=("0|$(basename "$p")    ${C_DIM}session moved to $(trunc "$movedto" 24)${C_RESET}")
+      resume_paths+=("$p")
+      resume_hassess+=("0")
+    elif [ -n "$newest" ]; then
+      sess_epoch=${wt_epoch[$i]}
       title=$(grep -m1 -o '"aiTitle":"[^"]*"' "$sdir/$newest" 2>/dev/null | sed 's/"aiTitle":"//; s/"$//')
       [ -n "$title" ] || title="(untitled)"
       sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
