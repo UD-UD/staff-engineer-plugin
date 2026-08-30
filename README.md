@@ -30,13 +30,16 @@ merged PR, and nothing (not even the AI's own habits) can shortcut it.
 
 | Layer | What it does |
 |---|---|
-| **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution, SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
+| **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution (every stage boundary waits for your approval), SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
 | **Skills** | The workflow verbs, invoked as `/se:<name>` or auto-triggered when the moment matches |
 | **Agents** | Parallel **Sonnet builders** implement independent plan steps; a read-only **staff-reviewer** hunts verified bugs with no memory of writing the code; a plain-English **explainer** publishes plans and reviews as readable artifact pages |
 | **Hooks** | Shell guardrails on every git command — they cannot be argued with |
 | **CLI** | `se` — the deterministic workflow CLI: the status board plus `env` / `baseline` / `teardown` / `debt`, all built from durable on-disk state; zero tokens, correct right after a reboot |
 
 ## Install
+
+**Requirements:** macOS or Linux, `git`, and `python3` on PATH (both the git
+guard and `se` parse JSON with it). `gh` only if you use `/se:pr`.
 
 **Try it for one session:**
 
@@ -47,14 +50,30 @@ claude --plugin-dir /path/to/staff-engineer-plugin
 **Install persistently** (the repo doubles as a one-plugin marketplace) — inside Claude Code:
 
 ```
-/plugin marketplace add https://github.com/UD-UD/staff-engineer-plugin.git
+/plugin marketplace add UD-UD/staff-engineer-plugin
 /plugin install se@ujjal-plugins
 ```
 
-From a local clone, use the clone's path in `marketplace add` instead. The
-`se` terminal command ships in the plugin's `bin/` (on PATH for installed
-plugins); to use it outside Claude Code, alias it:
-`alias se='/path/to/staff-engineer-plugin/bin/se'`.
+`marketplace add` has to be able to reach the repo: use `owner/repo` for a
+public GitHub repo, a full URL for other hosts, or a path to a local clone —
+a private repo works only for someone whose `gh`/git credentials can read it.
+
+### The `se` command in your terminal
+
+Installing the plugin puts `bin/` on PATH **inside Claude Code sessions**. A
+plain terminal never sees that, and the status board is most useful with no
+session running — so link it into a directory already on your PATH:
+
+```bash
+ln -s /path/to/staff-engineer-plugin/bin/se ~/.local/bin/se   # any PATH dir
+rehash                                                        # zsh: refresh open shells
+```
+
+Point the link at a git clone and `git pull` keeps the command current. (An
+`alias se=...` in your shell rc also works, but won't resolve inside scripts
+or non-interactive shells.) Installed from GitHub via `/plugin install`
+there's no local clone to point at — so the first session prints the exact
+`ln -s` command for wherever the plugin actually landed.
 
 After editing the plugin: `claude plugin validate .` and `/reload-plugins`.
 
@@ -199,7 +218,7 @@ your-project/
 ├── scratchpad/            # gitignored agent sandbox (baselines, artifacts, scripts)
 ├── docs/
 │   ├── architecture/      # complete overview: data flow, control flow,
-│   │                      # dev-environment.md, worktree.json (sync + hooks + baseline.commands)
+│   │                      # dev-environment.md, worktree.json (copy/symlink/postCreate/preDelete/baseline)
 │   ├── decisions.md       # decision log, newest first
 │   └── plan/              # one implementation plan per worktree
 └── src/ …
@@ -256,3 +275,5 @@ First draft, evolving fast. Honest edges:
   a squashed or fast-forwarded branch reads as unmerged and is refused; use
   manual `git worktree remove` + `git branch -d` for those.
 - Builder file-scope discipline is instruction-enforced, not mechanical.
+- So are the stage gates (principle 4): a hook can't tell approval from
+  silence, so they live in the principles and skills, not in a script.

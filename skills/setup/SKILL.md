@@ -29,9 +29,10 @@ Every project is self-contained in its directory:
   *complete* project picture: data flow, control flow, module/architecture
   mappings, `dev-environment.md` (how to run dev/test envs, including
   per-worktree isolation knobs), and `worktree.json` (machine-readable
-  worktree setup: files to copy, dirs to symlink, post-create/pre-delete
-  commands — the worktree skill creates and maintains it). If understanding the project requires
-  reading source cold, this folder is incomplete.
+  worktree setup: `copy`/`symlink`/`postCreate`/`preDelete`/`baseline`
+  entries, each annotated with why it's there — the worktree skill creates
+  and maintains it). If understanding the project requires reading source
+  cold, this folder is incomplete.
 - **`docs/decisions.md`** — every significant planning or implementation
   decision, newest first (template below). Append when a decision is made,
   not at the end of the project.
@@ -148,8 +149,8 @@ dropped**.
 ### 5. Seed the machine-readable setup
 
 - `docs/architecture/worktree.json` from what the repo shows: env files to
-  copy, the install command for `postCreate`, services to stop in
-  `preDelete`.
+  `copy`, the install command for `postCreate`, services to stop in
+  `preDelete` — annotate each entry with why it's there.
 - `docs/architecture/dev-environment.md`: how to run dev and tests, and
   which hardcoded ports/DB paths must become env-configurable before
   worktrees can run in parallel — propose those as separate small changes.

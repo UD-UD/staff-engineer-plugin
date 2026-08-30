@@ -8,16 +8,20 @@
 # usage: se [status|env|baseline|teardown <name>|debt|help]
 #
 #   status            status board (default): worktrees, TODO progress,
-#                     resume commands, anomalies
+#                     resume commands, anomalies. The resume list is a
+#                     numbered menu; when stdin+stdout are both a tty it
+#                     prompts to join or start a session there. Set
+#                     SE_NO_PROMPT=1 to always skip the prompt (also
+#                     skipped automatically when not interactive).
 #   env               set up this checkout from docs/architecture/worktree.json
 #                     (copy files, symlink dirs, postCreate hooks, ignore
 #                     check). Idempotent.
-#   baseline          run worktree.json's baseline.commands, record
+#   baseline          run worktree.json's baseline commands, record
 #                     PASS/FAIL + duration + output tail to
 #                     scratchpad/baseline.md
-#   teardown <name>   remove .claude/worktrees/<name> once merged and clean:
-#                     preDelete hooks, worktree remove, branch -d, prune.
-#                     No force flag — a dirty or unmerged target is refused.
+#   teardown <name>   remove .claude/worktrees/<name> once merged, clean, and
+#                     free of irreplaceable files: preDelete hooks, worktree
+#                     remove, branch -d, prune. No force flag exists.
 #   debt              scan for `se-debt: <ceiling>, <trigger>` markers in
 #                     comments; report file:line + text, flag ones missing
 #                     a trigger, and print a summary. Exit 0 always.
@@ -27,7 +31,7 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -64,34 +68,108 @@ rel_age() { # epoch -> 5m / 3h / 2d
 
 # ASCII only in aligned columns: printf pads by bytes, so multibyte
 # glyphs (arrows, ellipses) silently break the table.
+# True when any path SEGMENT is rebuildable noise, at any depth — a
+# monorepo's packages/*/node_modules must not read as precious.
+is_rebuildable() { # relative path
+  local seg IFS=/
+  for seg in $1; do
+    case "$seg" in
+      node_modules|.next|dist|build|.turbo|coverage|.venv|__pycache__|.pnpm-store|.cache|scratchpad)
+        return 0 ;;
+    esac
+  done
+  return 1
+}
+
 trunc() { # string maxlen
   local s=$1 n=$2
   if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
 }
 
-# Reads a JSON array of strings at the given dotted key path (e.g.
-# "sync copyFiles"), one item per line. Prints nothing if the file, path, or
-# array is absent — every caller treats "no output" as "nothing configured".
-json_list() {
-  local file=$1; shift
-  python3 - "$file" "$@" <<'PY'
+# Single python entry point for docs/architecture/worktree.json. Two modes,
+# selected by argv[1]:
+#   shape <file>              -> OK / EMPTY / OLD / UNREADABLE (never fails)
+#   records <file> <section>  -> one KIND\tVALUE\tWHY\tREQUIRED line per
+#                                 entry (KIND: path/run/check); prints
+#                                 nothing when the file/section is absent.
+#                                 A malformed entry (object with none of
+#                                 run/path/check) is fatal: message on
+#                                 stderr naming the file + entry index,
+#                                 exit 2 — every caller checks $? right after
+#                                 capturing this with `$(...)`.
+wt_json_py() {
+  python3 - "$@" <<'PY'
 import json, sys
-file = sys.argv[1]
-keys = sys.argv[2:]
-try:
-    with open(file) as fh:
-        data = json.load(fh)
-except Exception:
+
+CANONICAL = ["copy", "symlink", "postCreate", "preDelete", "baseline"]
+
+def clean(s):
+    return str(s).replace("\t", " ").replace("\n", " ")
+
+def normalize(file, section, item, idx):
+    if isinstance(item, str):
+        kind = "path" if section in ("copy", "symlink") else "run"
+        return kind, item, "", ""
+    if isinstance(item, dict):
+        why = item.get("why") or ""
+        if "path" in item:
+            kind, value = "path", item["path"]
+        elif "run" in item:
+            kind, value = "run", item["run"]
+        elif "check" in item:
+            kind, value = "check", item["check"]
+        else:
+            sys.stderr.write(
+                "se: malformed entry in %s: '%s' item %d has none of "
+                "run/path/check\n" % (file, section, idx)
+            )
+            sys.exit(2)
+        required = "1" if item.get("required") else ""
+        return kind, value, why, required
+    sys.stderr.write(
+        "se: malformed entry in %s: '%s' item %d is not a string or "
+        "object\n" % (file, section, idx)
+    )
+    sys.exit(2)
+
+mode = sys.argv[1] if len(sys.argv) > 1 else ""
+
+if mode == "shape":
+    file = sys.argv[2]
+    try:
+        with open(file) as fh:
+            data = json.load(fh)
+    except Exception:
+        data = None
+    if not isinstance(data, dict):
+        print("UNREADABLE")
+        sys.exit(0)
+    old = "sync" in data or "hooks" in data or isinstance(data.get("baseline"), dict)
+    if old:
+        print("OLD")
+        sys.exit(0)
+    total = sum(len(data[k]) for k in CANONICAL if isinstance(data.get(k), list))
+    print("OK" if total > 0 else "EMPTY")
     sys.exit(0)
-for k in keys:
+
+if mode == "records":
+    file, section = sys.argv[2], sys.argv[3]
+    try:
+        with open(file) as fh:
+            data = json.load(fh)
+    except Exception:
+        sys.exit(0)
     if not isinstance(data, dict):
         sys.exit(0)
-    data = data.get(k)
-    if data is None:
+    items = data.get(section)
+    if not isinstance(items, list):
         sys.exit(0)
-if isinstance(data, list):
-    for item in data:
-        print(item)
+    for i, item in enumerate(items):
+        kind, value, why, required = normalize(file, section, item, i)
+        print("\t".join(clean(f) for f in (kind, value, why, required)))
+    sys.exit(0)
+
+sys.exit(0)
 PY
 }
 
@@ -129,6 +207,38 @@ while IFS= read -r line; do
 done < <(git -C "$root" worktree list --porcelain)
 main_checkout=${paths[0]:-$root}
 
+# Launch Claude Code for one resume-menu row. n: 1-based index into the
+# resume_sorted_* arrays cmd_status built. mode: "join" (that row's saved
+# session, falling back to a fresh session when it has none — same as the
+# row's own printed text) or "new" (always a fresh session).
+resume_launch() {
+  local n=$1 mode=$2 idx p hassess use_continue
+  idx=$((n - 1))
+  p=${resume_sorted_paths[$idx]}
+  hassess=${resume_sorted_hassess[$idx]}
+  use_continue=0
+  [ "$mode" = "join" ] && [ "$hassess" = "1" ] && use_continue=1
+
+  if ! command -v claude >/dev/null 2>&1; then
+    if [ "$use_continue" = "1" ]; then
+      echo "se: claude not found on PATH — run this yourself: cd $p && claude --continue" >&2
+    else
+      echo "se: claude not found on PATH — run this yourself: cd $p && claude" >&2
+    fi
+    exit 1
+  fi
+
+  if [ "$use_continue" = "1" ]; then
+    printf '→ cd %s && claude --continue\n' "$p"
+    cd "$p" || exit 1
+    exec claude --continue
+  else
+    printf '→ cd %s && claude\n' "$p"
+    cd "$p" || exit 1
+    exec claude
+  fi
+}
+
 cmd_status() {
   # Live overlay: cwds of running claude sessions (empty after reboot — fine).
   running_cwds=""
@@ -150,6 +260,8 @@ except Exception:
 
   anomalies=()
   resume_lines=()
+  resume_paths=()
+  resume_hassess=()
 
   for ((i = 0; i < ${#paths[@]}; i++)); do
     p=${paths[$i]} b=${branches[$i]}
@@ -195,8 +307,12 @@ except Exception:
       [ -n "$title" ] || title="(untitled)"
       sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
       resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
+      resume_paths+=("$p")
+      resume_hassess+=("1")
     else
       resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
+      resume_paths+=("$p")
+      resume_hassess+=("0")
     fi
     is_running "$p" && sess="$sess ● running"
 
@@ -233,9 +349,66 @@ except Exception:
     for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
   fi
 
+  # Sort resume rows by epoch (most recent first), same ordering the old
+  # print pipeline produced, but keep it indexable: order[] holds the
+  # original resume_lines/resume_paths/resume_hassess index for each
+  # position, so the picker below can act on a plain 1-based number.
+  order=()
+  while IFS= read -r idx; do order+=("$idx"); done < <(
+    for ((i = 0; i < ${#resume_lines[@]}; i++)); do
+      printf '%s\t%d\n' "${resume_lines[$i]%%|*}" "$i"
+    done | sort -t $'\t' -k1,1rn | cut -f2
+  )
+
+  resume_count=${#order[@]}
+  width=${#resume_count}
+  resume_sorted_paths=()
+  resume_sorted_hassess=()
   printf '\nResume (most recent first):\n'
-  for ((i = 0; i < ${#resume_lines[@]}; i++)); do printf '%s\n' "${resume_lines[$i]}"; done |
-    sort -t'|' -k1,1rn | cut -d'|' -f2- | sed 's/^/  /'
+  n=0
+  for idx in "${order[@]}"; do
+    n=$((n + 1))
+    resume_sorted_paths+=("${resume_paths[$idx]}")
+    resume_sorted_hassess+=("${resume_hassess[$idx]}")
+    printf '  %*d  %s\n' "$width" "$n" "${resume_lines[$idx]#*|}"
+  done
+
+  # Interactive picker: only when it is safe to prompt — a real terminal on
+  # both stdin and stdout, and not explicitly suppressed. This keeps `se`
+  # pipeable, scriptable and CI-safe: any redirect or SE_NO_PROMPT=1 falls
+  # straight through to `exit 0` below, printing exactly the report above.
+  if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ] && [ "$resume_count" -gt 0 ]; then
+    printf '\n'
+    while :; do
+      printf 'Join [1-%d], n<%d> for a new session, q to quit: ' "$resume_count" "$resume_count"
+      IFS= read -r choice || exit 0
+      case "$choice" in
+        ''|q|Q) exit 0 ;;
+        [nN]*)
+          rest=${choice#?}
+          rest=${rest# }
+          case "$rest" in
+            ''|*[!0-9]*) printf 'not a valid choice\n'; continue ;;
+          esac
+          if [ "$rest" -ge 1 ] && [ "$rest" -le "$resume_count" ]; then
+            resume_launch "$rest" new
+          else
+            printf 'not a valid choice\n'
+          fi
+          ;;
+        *)
+          case "$choice" in
+            *[!0-9]*) printf 'not a valid choice\n'; continue ;;
+          esac
+          if [ "$choice" -ge 1 ] && [ "$choice" -le "$resume_count" ]; then
+            resume_launch "$choice" join
+          else
+            printf 'not a valid choice\n'
+          fi
+          ;;
+      esac
+    done
+  fi
 
   exit 0
 }
@@ -247,47 +420,81 @@ cmd_env() {
     exit 0
   fi
 
+  case "$(wt_json_py shape "$wt_json")" in
+    OLD)
+      echo "se env: docs/architecture/worktree.json uses the old nested layout (sync/hooks/baseline.commands); rename to top-level copy/symlink/postCreate/preDelete/baseline" >&2
+      exit 1
+      ;;
+    EMPTY|UNREADABLE)
+      echo "se env: docs/architecture/worktree.json has no recognized entries — expected top-level keys: copy, symlink, postCreate, preDelete, baseline" >&2
+      exit 1
+      ;;
+  esac
+
   main=$main_checkout
 
-  # sync.copyFiles — untracked files the worktree needs, copied from main.
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    if [ -e "$root/$f" ]; then
-      echo "copy $f: already present"
-    elif [ -e "$main/$f" ]; then
-      cp -p "$main/$f" "$root/$f"
-      echo "copy $f: done"
+  # copy — untracked files the worktree needs, copied from main. A
+  # required:true entry missing from main is fatal, not just reported.
+  copy_records=$(wt_json_py records "$wt_json" copy); rc=$?
+  [ "$rc" -eq 0 ] || exit 1
+  while IFS=$'\t' read -r kind value why required; do
+    [ "$kind" = "path" ] || continue
+    [ -n "$value" ] || continue
+    if [ -e "$root/$value" ]; then
+      echo "copy $value: already present"
+    elif [ -e "$main/$value" ]; then
+      cp -p "$main/$value" "$root/$value"
+      echo "copy $value: done"
+    elif [ "$required" = "1" ]; then
+      echo "copy $value: missing in main (required)" >&2
+      exit 1
     else
-      echo "copy $f: missing in main"
+      echo "copy $value: missing in main"
     fi
-  done < <(json_list "$wt_json" sync copyFiles)
+  done < <(printf '%s\n' "$copy_records")
 
-  # sync.symlinkDirs — shared by symlink instead of reinstalling.
-  while IFS= read -r d; do
-    [ -n "$d" ] || continue
-    if [ -e "$root/$d" ] || [ -L "$root/$d" ]; then
-      echo "symlink $d: already present"
-    elif [ -e "$main/$d" ]; then
-      ln -s "$main/$d" "$root/$d"
-      echo "symlink $d: done"
+  # symlink — shared by symlink instead of reinstalling.
+  symlink_records=$(wt_json_py records "$wt_json" symlink); rc=$?
+  [ "$rc" -eq 0 ] || exit 1
+  while IFS=$'\t' read -r kind value why required; do
+    [ "$kind" = "path" ] || continue
+    [ -n "$value" ] || continue
+    if [ -e "$root/$value" ] || [ -L "$root/$value" ]; then
+      echo "symlink $value: already present"
+    elif [ -e "$main/$value" ]; then
+      ln -s "$main/$value" "$root/$value"
+      echo "symlink $value: done"
+    elif [ "$required" = "1" ]; then
+      echo "symlink $value: missing in main (required)" >&2
+      exit 1
     else
-      echo "symlink $d: missing in main"
+      echo "symlink $value: missing in main"
     fi
-  done < <(json_list "$wt_json" sync symlinkDirs)
+  done < <(printf '%s\n' "$symlink_records")
 
-  # hooks.postCreate — run inside this checkout; a failure is fatal, since
-  # a half-set-up worktree should stop the workflow, not silently continue.
-  while IFS= read -r cmd; do
-    [ -n "$cmd" ] || continue
-    out=$(cd "$root" && sh -c "$cmd" </dev/null 2>&1); rc=$?
-    if [ "$rc" -eq 0 ]; then
-      echo "postCreate '$cmd': ok"
+  # postCreate — run inside this checkout; a failure is fatal, since a
+  # half-set-up worktree should stop the workflow, not silently continue.
+  # check: entries are prose for a human, never executed.
+  postcreate_records=$(wt_json_py records "$wt_json" postCreate); rc=$?
+  [ "$rc" -eq 0 ] || exit 1
+  checks_printed=""
+  while IFS=$'\t' read -r kind value why required; do
+    [ -n "$value" ] || continue
+    if [ "$kind" = "check" ]; then
+      [ -n "$checks_printed" ] || { echo "manual checks (not run):"; checks_printed=1; }
+      if [ -n "$why" ]; then echo "  - $value ($why)"; else echo "  - $value"; fi
+      continue
+    fi
+    out=$(cd "$root" && sh -c "$value" </dev/null 2>&1); cmdrc=$?
+    if [ "$cmdrc" -eq 0 ]; then
+      echo "postCreate '$value': ok"
     else
       printf '%s\n' "$out" | tail -20
-      echo "postCreate '$cmd': failed (exit $rc)" >&2
+      echo "postCreate '$value': failed (exit $cmdrc)" >&2
+      [ -n "$why" ] && echo "why: $why" >&2
       exit 1
     fi
-  done < <(json_list "$wt_json" hooks postCreate)
+  done < <(printf '%s\n' "$postcreate_records")
 
   # Ignore check (from the main checkout, so it applies repo-wide).
   if git -C "$main" check-ignore -q .claude/worktrees; then
@@ -307,13 +514,16 @@ cmd_env() {
 
 cmd_baseline() {
   wt_json="$root/docs/architecture/worktree.json"
-  commands=""
-  [ -f "$wt_json" ] && commands=$(json_list "$wt_json" baseline commands)
-  if [ -z "$commands" ]; then
+  records=""
+  if [ -f "$wt_json" ]; then
+    records=$(wt_json_py records "$wt_json" baseline); rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+  fi
+  if [ -z "$records" ]; then
     cat >&2 <<'EOF'
-se baseline: no baseline.commands in docs/architecture/worktree.json
-add a "baseline" section, e.g.:
-  "baseline": {"commands": ["npm test", "npm run lint"]}
+se baseline: no baseline entries in docs/architecture/worktree.json
+add a top-level "baseline" list, e.g.:
+  "baseline": [{"run": "npm test", "why": "..."}, {"run": "npm run lint"}]
 EOF
     exit 1
   fi
@@ -327,21 +537,29 @@ EOF
     printf 'Branch: %s\n' "$branch"
   } > "$out_md"
 
-  while IFS= read -r cmd; do
-    [ -n "$cmd" ] || continue
+  checks_printed=""
+  while IFS=$'\t' read -r kind value why required; do
+    [ -n "$value" ] || continue
+    if [ "$kind" = "check" ]; then
+      [ -n "$checks_printed" ] || { echo "manual checks (not run):"; checks_printed=1; }
+      if [ -n "$why" ]; then echo "  - $value ($why)"; else echo "  - $value"; fi
+      continue
+    fi
     start=$(date +%s)
-    out=$(cd "$root" && sh -c "$cmd" </dev/null 2>&1); rc=$?
+    out=$(cd "$root" && sh -c "$value" </dev/null 2>&1); cmdrc=$?
     dur=$(( $(date +%s) - start ))
     tail_out=$(printf '%s\n' "$out" | tail -5)
-    if [ "$rc" -eq 0 ]; then
-      echo "PASS $cmd (${dur}s)"
-      { printf '\n## %s\n\nStatus: PASS\n' "$cmd"; } >> "$out_md"
+    if [ "$cmdrc" -eq 0 ]; then
+      echo "PASS $value (${dur}s)"
+      { printf '\n## %s\n\nStatus: PASS\n' "$value"; } >> "$out_md"
     else
-      echo "FAIL $cmd (exit $rc, ${dur}s)"
-      { printf '\n## %s\n\nStatus: FAIL (exit %d)\n' "$cmd" "$rc"; } >> "$out_md"
+      echo "FAIL $value (exit $cmdrc, ${dur}s)"
+      [ -n "$why" ] && echo "why: $why"
+      { printf '\n## %s\n\nStatus: FAIL (exit %d)\n' "$value" "$cmdrc"; } >> "$out_md"
+      [ -n "$why" ] && { printf 'Why: %s\n' "$why"; } >> "$out_md"
     fi
     { printf 'Duration: %ss\n\n```\n%s\n```\n' "$dur" "$tail_out"; } >> "$out_md"
-  done < <(printf '%s\n' "$commands")
+  done < <(printf '%s\n' "$records")
 
   echo "baseline -> scratchpad/baseline.md"
   exit 0
@@ -385,20 +603,75 @@ cmd_teardown() {
     exit 1
   fi
 
-  # hooks.preDelete — from the TARGET's worktree.json, run inside the target.
   target_json="$target/docs/architecture/worktree.json"
+
+  # Gate: config-declared `copy` entries. A gitignored file with no git
+  # history (secrets, local db snapshots) is irreplaceable once the
+  # worktree is gone — refuse if one is here and either missing from main
+  # or different from main's copy.
+  copy_hits=()
   if [ -f "$target_json" ]; then
-    while IFS= read -r cmd; do
-      [ -n "$cmd" ] || continue
-      out=$(cd "$target" && sh -c "$cmd" </dev/null 2>&1); rc=$?
-      if [ "$rc" -eq 0 ]; then
-        echo "preDelete '$cmd': ok"
+    copy_records=$(wt_json_py records "$target_json" copy); rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    while IFS=$'\t' read -r kind value why required; do
+      [ "$kind" = "path" ] || continue
+      [ -n "$value" ] || continue
+      [ -e "$target/$value" ] || continue
+      if [ ! -e "$main_checkout/$value" ]; then
+        copy_hits+=("$value (absent from main)")
+      elif ! cmp -s "$target/$value" "$main_checkout/$value"; then
+        copy_hits+=("$value (differs from main)")
+      fi
+    done < <(printf '%s\n' "$copy_records")
+  fi
+  if [ "${#copy_hits[@]}" -gt 0 ]; then
+    echo "se teardown: $target has config-declared files not safely replaceable from main — refusing:" >&2
+    for ((i = 0; i < ${#copy_hits[@]}; i++)); do printf '  %s\n' "${copy_hits[$i]}" >&2; done
+    echo "back these up (or delete them from the worktree if disposable), then re-run — se teardown never deletes them for you." >&2
+    exit 1
+  fi
+
+  # Gate: any other gitignored file unique to this worktree. `git status
+  # --porcelain` (the dirty gate above) never lists ignored files, so a
+  # unique .dev.vars or a local *.db with no git history would otherwise be
+  # destroyed silently. Rebuildable noise is excluded.
+  ignored_hits=()
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    is_rebuildable "$rel" && continue
+    [ -e "$main_checkout/$rel" ] && continue
+    ignored_hits+=("$rel")
+  done < <(git -C "$target" ls-files --others --ignored --exclude-standard 2>/dev/null)
+  if [ "${#ignored_hits[@]}" -gt 0 ]; then
+    echo "se teardown: $target has unique gitignored files with no git history — refusing:" >&2
+    for ((i = 0; i < ${#ignored_hits[@]}; i++)); do printf '  %s\n' "${ignored_hits[$i]}" >&2; done
+    echo "back these up (or delete them from the worktree if disposable), then re-run — se teardown never deletes them for you." >&2
+    exit 1
+  fi
+
+  # preDelete — from the TARGET's worktree.json, run inside the target.
+  # check: entries are prose for a human, never executed.
+  if [ -f "$target_json" ]; then
+    predelete_records=$(wt_json_py records "$target_json" preDelete); rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    checks_printed=""
+    while IFS=$'\t' read -r kind value why required; do
+      [ -n "$value" ] || continue
+      if [ "$kind" = "check" ]; then
+        [ -n "$checks_printed" ] || { echo "manual checks (not run):"; checks_printed=1; }
+        if [ -n "$why" ]; then echo "  - $value ($why)"; else echo "  - $value"; fi
+        continue
+      fi
+      out=$(cd "$target" && sh -c "$value" </dev/null 2>&1); cmdrc=$?
+      if [ "$cmdrc" -eq 0 ]; then
+        echo "preDelete '$value': ok"
       else
         printf '%s\n' "$out" | tail -20
-        echo "preDelete '$cmd': failed (exit $rc)" >&2
+        echo "preDelete '$value': failed (exit $cmdrc)" >&2
+        [ -n "$why" ] && echo "why: $why" >&2
         exit 1
       fi
-    done < <(json_list "$target_json" hooks preDelete)
+    done < <(printf '%s\n' "$predelete_records")
   fi
 
   if ! git -C "$main_checkout" worktree remove "$target"; then
