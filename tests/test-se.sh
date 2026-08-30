@@ -156,10 +156,41 @@ for sub in status env baseline teardown debt help; do
   assert_contains "se help mentions '$sub'" "$out" "$sub"
 done
 assert_contains "se help mentions SE_NO_PROMPT" "$out" "SE_NO_PROMPT"
+assert_contains "se help mentions SE_COLOR" "$out" "SE_COLOR"
 
 out=$(cd "$main" && "$se" bogus 2>&1)
 rc=$?
 assert_exit "se bogus exits 2" 2 "$rc"
+
+# ================================================================= color ===
+# $(...) capture never gives `se` a tty, so this is exactly the auto/off
+# regression guard: no escape byte should ever leak into a piped/captured run.
+esc=$(printf '\033')
+colorhome=$(mktemp -d)
+
+out_auto=$(cd "$main" && HOME="$colorhome" "$se")
+assert_not_contains "default (auto, non-tty) output has no escape sequence" "$out_auto" "${esc}["
+
+out_always=$(cd "$main" && HOME="$colorhome" SE_COLOR=always "$se")
+assert_contains "SE_COLOR=always output has an escape sequence" "$out_always" "${esc}["
+
+out_never=$(cd "$main" && HOME="$colorhome" SE_COLOR=never "$se")
+assert_not_contains "SE_COLOR=never output has no escape sequence" "$out_never" "${esc}["
+
+out_nocolor=$(cd "$main" && HOME="$colorhome" NO_COLOR=1 SE_COLOR=auto "$se")
+assert_not_contains "NO_COLOR=1 SE_COLOR=auto output has no escape sequence" "$out_nocolor" "${esc}["
+
+# Alignment regression: the colorized board, with escapes stripped, must be
+# byte-identical to the plain one — this is the assertion that protects the
+# table (printf pads by bytes; coloring before padding would corrupt it).
+stripped_always=$(printf '%s\n' "$out_always" | sed "s/${esc}\[[0-9;]*m//g")
+if [ "$out_auto" = "$stripped_always" ]; then
+  ok "color does not change table alignment (stripped SE_COLOR=always == plain)"
+else
+  notok "color does not change table alignment (stripped SE_COLOR=always == plain)"
+fi
+
+rm -rf "$colorhome"
 
 # =================================================================== env ===
 out1=$(cd "$feat" && "$se" env)
@@ -414,7 +445,10 @@ run_picker() { # $1 = stdin to feed the pty
   # the input is written: `script` tears the pty down as soon as its own
   # stdin hits EOF, which otherwise races the child's `read` and can kill it
   # before the input is ever consumed.
-  { printf '%s' "$1"; sleep 0.5; } | script -q /dev/null sh -c "cd '$pickrepo' || exit 1; PATH='$fakebin:'\"\$PATH\" HOME='$pickhome' '$se'; echo \$? > '$pick_rcfile'" 2>&1
+  # SE_COLOR=never: this test drives the interactive picker over a real pty
+  # (so [ -t 1 ] is true and auto-color would kick in) but only cares about
+  # the plain text — color itself is covered separately below.
+  { printf '%s' "$1"; sleep 0.5; } | script -q /dev/null sh -c "cd '$pickrepo' || exit 1; PATH='$fakebin:'\"\$PATH\" HOME='$pickhome' SE_COLOR=never '$se'; echo \$? > '$pick_rcfile'" 2>&1
 }
 
 # A real resume_launch call always logs args exactly "" (bare `claude`) or
