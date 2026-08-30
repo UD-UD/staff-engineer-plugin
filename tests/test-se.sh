@@ -280,6 +280,10 @@ for sub in status env baseline teardown debt help; do
 done
 assert_contains "se help mentions SE_NO_PROMPT" "$out" "SE_NO_PROMPT"
 assert_contains "se help mentions SE_COLOR" "$out" "SE_COLOR"
+# The usage block ends itself rather than at a hardcoded line number, so
+# growing it can neither truncate the help nor spill shell code into it.
+assert_contains "se help prints through its last entry" "$out" "help              this text"
+assert_not_contains "se help stops before the shell code" "$out" "set -u"
 
 out=$(cd "$main" && "$se" bogus 2>&1)
 rc=$?
@@ -316,9 +320,17 @@ fi
 rm -rf "$colorhome"
 
 # =================================================================== env ===
+# The agent sandbox: gitignored, so git never carries it into a new worktree,
+# and nothing else creates it — `se baseline` only does so as a side effect of
+# writing its report, and a worktree may never run one.
+assert_true "the fresh worktree has no scratchpad/ before se env" \
+  "$([ -d "$feat/scratchpad" ] && echo 1 || echo 0)"
+
 out1=$(cd "$feat" && "$se" env)
 rc1=$?
 assert_exit "se env (first run) exits 0" 0 "$rc1"
+assert_true "se env creates the scratchpad/ sandbox" "$([ -d "$feat/scratchpad" ] && echo 0 || echo 1)"
+assert_contains "se env says it created the sandbox" "$out1" "scratchpad/: created"
 assert_contains "se env copies .env (annotated object entry)" "$out1" "copy .env: done"
 assert_true "se env leaves .env in the worktree" "$([ -f "$feat/.env" ] && echo 0 || echo 1)"
 assert_contains "se env symlinks shared-dir (annotated object entry)" "$out1" "symlink shared-dir: done"
@@ -330,6 +342,35 @@ rc2=$?
 assert_exit "se env (second run) exits 0" 0 "$rc2"
 assert_contains "se env is idempotent (.env already present)" "$out2" "copy .env: already present"
 assert_contains "se env is idempotent (shared-dir already present)" "$out2" "symlink shared-dir: already present"
+assert_contains "se env is idempotent (scratchpad already present)" "$out2" "scratchpad/: already present"
+
+# A checkout with no worktree.json still gets its sandbox — the scratchpad
+# half runs before the config half can bail out. This is the common case:
+# most repos never write a worktree.json at all.
+nocfg="$tmpdir/nocfg"
+mkdir -p "$nocfg"
+git -C "$nocfg" init -q -b main
+git -C "$nocfg" config user.email test@example.com
+git -C "$nocfg" config user.name Test
+printf 'scratchpad/\n' > "$nocfg/.gitignore"
+printf '# fixture\n' > "$nocfg/README.md"
+git -C "$nocfg" add -A
+git -C "$nocfg" commit -q -m init
+
+out=$(cd "$nocfg" && "$se" env)
+rc=$?
+assert_exit "se env with no worktree.json exits 0" 0 "$rc"
+assert_true "se env creates scratchpad/ even with no worktree.json" \
+  "$([ -d "$nocfg/scratchpad" ] && echo 0 || echo 1)"
+assert_contains "se env reports it had nothing else to do" "$out" "nothing else to do"
+
+# Not gitignored: still created, but said out loud on stderr. An un-ignored
+# sandbox turns everything an agent writes into a spurious working change.
+rm -rf "$nocfg/scratchpad"
+printf '\n' > "$nocfg/.gitignore"
+err=$(cd "$nocfg" && "$se" env 2>&1 >/dev/null)
+assert_contains "se env warns when scratchpad/ is not gitignored" "$err" "NOT gitignored"
+assert_true "se env creates it anyway" "$([ -d "$nocfg/scratchpad" ] && echo 0 || echo 1)"
 
 # =============================================================== baseline ==
 out=$(cd "$feat" && "$se" baseline)

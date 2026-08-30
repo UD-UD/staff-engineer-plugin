@@ -25,9 +25,11 @@
 #                     "started from <dir>". Each checkout shows its 3 newest
 #                     sessions, read from the 8 newest transcripts in its
 #                     project folder — anything older is not offered.
-#   env               set up this checkout from docs/architecture/worktree.json
+#   env               set up this checkout: create the gitignored scratchpad/
+#                     sandbox, then apply docs/architecture/worktree.json
 #                     (copy files, symlink dirs, postCreate hooks, ignore
-#                     check). Idempotent.
+#                     check). Idempotent, and the scratchpad half runs even
+#                     with no worktree.json.
 #   baseline          run worktree.json's baseline commands, record
 #                     PASS/FAIL + duration + output tail to
 #                     scratchpad/baseline.md
@@ -43,7 +45,10 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
+    # From line 2 to the first line that is not a comment, minus that line —
+    # the usage block defines its own end, so editing it never silently
+    # truncates the help the way a hardcoded range does.
+    sed -n '2,/^[^#]/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -613,9 +618,24 @@ except Exception:
 }
 
 cmd_env() {
+  # The agent sandbox comes first, before any early exit. scratchpad/ is
+  # gitignored, so git never carries it into a new worktree, and nothing else
+  # creates it — `se baseline` only does so as a side effect of writing its
+  # report. A worktree that never runs a baseline had nowhere in-tree to put
+  # intermediate files, which is how agents end up littering /tmp instead.
+  if [ -d "$root/scratchpad" ]; then
+    echo "scratchpad/: already present"
+  else
+    mkdir -p "$root/scratchpad"
+    echo "scratchpad/: created"
+  fi
+  if ! git -C "$root" check-ignore -q scratchpad 2>/dev/null; then
+    echo "scratchpad/: NOT gitignored — add it to .gitignore, or its contents will show up as changes" >&2
+  fi
+
   wt_json="$root/docs/architecture/worktree.json"
   if [ ! -f "$wt_json" ]; then
-    echo "no docs/architecture/worktree.json — nothing to do"
+    echo "no docs/architecture/worktree.json — nothing else to do"
     exit 0
   fi
 
