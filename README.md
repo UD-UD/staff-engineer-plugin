@@ -38,6 +38,9 @@ merged PR, and nothing (not even the AI's own habits) can shortcut it.
 
 ## Install
 
+**Requirements:** macOS or Linux, `git`, and `python3` on PATH (both the git
+guard and `se` parse JSON with it). `gh` only if you use `/se:pr`.
+
 **Try it for one session:**
 
 ```bash
@@ -47,14 +50,28 @@ claude --plugin-dir /path/to/staff-engineer-plugin
 **Install persistently** (the repo doubles as a one-plugin marketplace) — inside Claude Code:
 
 ```
-/plugin marketplace add https://github.com/UD-UD/staff-engineer-plugin.git
+/plugin marketplace add UD-UD/staff-engineer-plugin
 /plugin install se@ujjal-plugins
 ```
 
-From a local clone, use the clone's path in `marketplace add` instead. The
-`se` terminal command ships in the plugin's `bin/` (on PATH for installed
-plugins); to use it outside Claude Code, alias it:
-`alias se='/path/to/staff-engineer-plugin/bin/se'`.
+`marketplace add` has to be able to reach the repo: use `owner/repo` for a
+public GitHub repo, a full URL for other hosts, or a path to a local clone —
+a private repo works only for someone whose `gh`/git credentials can read it.
+
+### The `se` command in your terminal
+
+Installing the plugin puts `bin/` on PATH **inside Claude Code sessions**. A
+plain terminal never sees that, and the status board is most useful with no
+session running — so link it into a directory already on your PATH:
+
+```bash
+ln -s /path/to/staff-engineer-plugin/bin/se ~/.local/bin/se   # any PATH dir
+rehash                                                        # zsh: refresh open shells
+```
+
+Point the link at a git clone and `git pull` keeps the command current. (An
+`alias se=...` in your shell rc also works, but won't resolve inside scripts
+or non-interactive shells.)
 
 After editing the plugin: `claude plugin validate .` and `/reload-plugins`.
 
