@@ -284,6 +284,54 @@ is_branch_merged() {
   ! in_mainline "$tip"
 }
 
+# The plan file for a branch, or nothing. The documented name is
+# docs/plan/<branch>.md, but a branch carries characters a filename should not
+# — Claude Code's own worktrees produce a `+` — so try the exact name, then
+# the flattened one, then "there is exactly one plan here".
+plan_file_named() { # checkout-path branch -> path named for THIS branch, or nothing
+  local p=$1 b=$2 try
+  try="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
+  [ -f "$try" ] && { printf '%s' "$try"; return 0; }
+  try="$p/docs/plan/$(printf '%s' "$b" | sed 's/[^A-Za-z0-9._-]/-/g').md"
+  [ -f "$try" ] && printf '%s' "$try"
+  return 0
+}
+
+# For display, a lone plan file is this worktree's plan whatever it is called.
+# That guess is fine for a progress column and unsafe for a gate: a branch cut
+# from a base that already carries someone else's finished plan would inherit
+# it, so plan_complete deliberately does not use this.
+plan_file() { # checkout-path branch -> path, or nothing
+  local f cand
+  f=$(plan_file_named "$1" "$2")
+  [ -n "$f" ] && { printf '%s' "$f"; return 0; }
+  cand=$(/bin/ls "$1/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
+  [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && printf '%s' "$1/docs/plan/$cand"
+  return 0
+}
+
+# A finished checklist: no open items, and at least one ticked. The "at least
+# one" stops a plan carrying no checklist at all from reading as complete.
+# Only a plan named for this branch counts — see plan_file.
+plan_complete() { # checkout-path branch
+  local f
+  f=$(plan_file_named "$1" "$2")
+  [ -n "$f" ] || return 1
+  [ "$(grep -cE '^[[:space:]]*- \[ \]' "$f")" = "0" ] || return 1
+  [ "$(grep -cE '^[[:space:]]*- \[x\]' "$f")" != "0" ]
+}
+
+# The one gate both the status board and `se teardown` ask, so the board can
+# never recommend a teardown the tool then refuses. A branch qualifies when it
+# demonstrably diverged and was merged, OR when it is merged and its plan is
+# finished — the second arm covers a branch left pointing at its own merge
+# commit, whose tip is back on base's first-parent chain and so looks exactly
+# like a branch freshly created off base with no work on it yet.
+safe_to_teardown() { # checkout-path branch
+  is_branch_merged "$2" && return 0
+  is_merged "$2" && plan_complete "$1" "$2"
+}
+
 # Parse worktrees: paths[] / branches[] in `git worktree list` order — the
 # first entry is always the main checkout, regardless of which checkout $root
 # points at.
@@ -408,21 +456,8 @@ except Exception:
     # --- plan TODO progress ---
     todo="-" next="-" todocolor="$C_DIM"
     if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
-      # The documented name is `docs/plan/<branch>.md`, but a branch carries
-      # characters a filename usually does not: Claude Code's own worktrees
-      # produce branches like `worktree-fix+mobile-keyboard-and-touch`, whose
-      # plan gets written with the `+` flattened. Try the exact name, then the
-      # flattened one, before falling back to "there is only one plan here".
-      plan="$p/docs/plan/$(printf '%s' "$b" | tr '/' '-').md"
-      if [ ! -f "$plan" ]; then
-        flat="$p/docs/plan/$(printf '%s' "$b" | sed 's/[^A-Za-z0-9._-]/-/g').md"
-        [ -f "$flat" ] && plan="$flat"
-      fi
-      if [ ! -f "$plan" ]; then
-        cand=$(/bin/ls "$p/docs/plan" 2>/dev/null | grep '\.md$' | grep -vi '^readme')
-        [ "$(printf '%s\n' "$cand" | grep -c .)" = "1" ] && plan="$p/docs/plan/$cand"
-      fi
-      if [ -f "$plan" ]; then
+      plan=$(plan_file "$p" "$b")
+      if [ -n "$plan" ]; then
         done_n=$(grep -cE '^[[:space:]]*- \[x\]' "$plan")
         open_n=$(grep -cE '^[[:space:]]*- \[ \]' "$plan")
         todo="$done_n/$((done_n + open_n))"
@@ -477,7 +512,7 @@ except Exception:
         else
           anomalies+=("$b — merged into $base but worktree still exists → run \`se teardown $wtname\`")
         fi
-      elif is_merged "$b" && [ "$next" = "all done" ]; then
+      elif safe_to_teardown "$p" "$b"; then
         anomalies+=("$b — TODO complete and branch merged → run \`se teardown $wtname\`")
       fi
     fi
@@ -817,8 +852,17 @@ cmd_teardown() {
     exit 1
   fi
 
-  if [ "$branch" = "(detached)" ] || ! is_branch_merged "$branch"; then
-    printf '%sse teardown: branch '"'"'%s'"'"' is not merged into %s — refusing%s\n' "$C_RED" "$branch" "$base" "$C_RESET" >&2
+  if [ "$branch" = "(detached)" ] || ! safe_to_teardown "$target" "$branch"; then
+    # Say which half failed: "merged but indistinguishable from a fresh
+    # branch" is a very different problem from "not merged", and the board
+    # recommending a teardown the tool refused was diagnosable only by
+    # reading the source.
+    if [ "$branch" != "(detached)" ] && is_merged "$branch"; then
+      printf '%sse teardown: branch '"'"'%s'"'"' is merged into %s but has no completed plan, so it cannot be told apart from a branch freshly created off %s — refusing%s\n' \
+        "$C_RED" "$branch" "$base" "$base" "$C_RESET" >&2
+    else
+      printf '%sse teardown: branch '"'"'%s'"'"' is not merged into %s — refusing%s\n' "$C_RED" "$branch" "$base" "$C_RESET" >&2
+    fi
     exit 1
   fi
 

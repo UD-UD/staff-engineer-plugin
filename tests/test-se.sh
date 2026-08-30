@@ -384,14 +384,29 @@ assert_contains "se baseline prints why on a failing command" "$out" "always fai
 assert_true "se baseline writes scratchpad/baseline.md" "$([ -f "$feat/scratchpad/baseline.md" ] && echo 0 || echo 1)"
 
 # =============================================================== teardown ==
-# 1. unmerged — refuse. feat-x hasn't diverged from main with a real merge
-#    yet, and the worktree is clean (the files env/baseline left behind are
-#    all covered by .gitignore), so this exercises the merge gate.
+# 1. nothing to show for it — refuse. feat-x has not diverged from main at
+#    all, so git itself calls it merged while it is plainly not finished; the
+#    missing completed plan is what holds the gate. The worktree is clean (the
+#    files env/baseline left behind are all covered by .gitignore).
 out=$(cd "$main" && "$se" teardown feat-x 2>&1)
 rc=$?
-assert_exit "se teardown refuses while unmerged" 1 "$rc"
-assert_contains "unmerged refusal names the reason" "$out" "not merged"
-assert_true "worktree survives the unmerged refusal" "$([ -d "$feat" ] && echo 0 || echo 1)"
+assert_exit "se teardown refuses a branch with nothing to show for it" 1 "$rc"
+assert_contains "the refusal explains it reads as a fresh branch" "$out" "no completed plan"
+assert_true "worktree survives the refusal" "$([ -d "$feat" ] && echo 0 || echo 1)"
+
+# 1b. genuinely unmerged — the other refusal, and the other message.
+featU="$main/.claude/worktrees/feat-u"
+git -C "$main" worktree add -q -b feat-u "$featU" main
+touch "$featU/unmerged.txt"
+git -C "$featU" add unmerged.txt
+git -C "$featU" commit -q -m "feat-u: work main does not have"
+out=$(cd "$main" && "$se" teardown feat-u 2>&1)
+rc=$?
+assert_exit "se teardown refuses a branch with unmerged commits" 1 "$rc"
+assert_contains "the unmerged refusal names the reason" "$out" "not merged"
+assert_true "the unmerged worktree survives" "$([ -d "$featU" ] && echo 0 || echo 1)"
+git -C "$main" worktree remove "$featU"
+git -C "$main" branch -D feat-u >/dev/null 2>&1
 
 # 2. dirty — refuse, even though it would otherwise be mergeable.
 echo junk > "$feat/junk.txt"
@@ -482,6 +497,47 @@ rc=$?
 assert_exit "se teardown refuses when a unique ignored file exists only in the worktree" 1 "$rc"
 assert_contains "ignored-file refusal names .data/local.db" "$out" ".data/local.db"
 assert_true "feat-z worktree survives the ignored-file refusal" "$([ -d "$featZ" ] && echo 0 || echo 1)"
+
+# --- teardown: a merged branch whose tip sits on main's own history ---------
+# After a PR merges, a branch is sometimes left pointing at the merge commit
+# itself. Nothing unique remains on it, and its tip is on main's first-parent
+# chain — indistinguishable, by that test alone, from a branch freshly created
+# off main with no work yet. The status board flags it for teardown on the
+# strength of its completed plan, so teardown has to accept it too, or the
+# board recommends a command the tool refuses.
+featM="$main/.claude/worktrees/feat-m"
+git -C "$main" worktree add -q -b feat-m "$featM" main
+mkdir -p "$featM/docs/plan"
+printf '# plan\n\n## TODO\n- [x] 1. the work\n- [x] 2. the rest\n' > "$featM/docs/plan/feat-m.md"
+git -C "$featM" add docs/plan/feat-m.md
+git -C "$featM" commit -q -m "feat-m: plan"
+git -C "$main" merge -q --no-ff -m "merge feat-m" feat-m >/dev/null
+# The branch is moved onto the merge commit — exactly the shape left behind
+# in the wild, and what made teardown refuse a branch it had itself merged.
+# It has to be moved from inside its own worktree: git refuses to force-update
+# a branch that is checked out somewhere, so `git branch -f` here would fail
+# silently enough to leave the fixture testing nothing.
+git -C "$featM" reset --hard main >/dev/null 2>&1
+
+out=$(cd "$main" && "$se" 2>&1)
+assert_contains "the board flags the merged branch for teardown" "$out" "se teardown feat-m"
+
+out=$(cd "$main" && "$se" teardown feat-m 2>&1)
+rc=$?
+assert_exit "se teardown accepts a merged branch with a complete plan" 0 "$rc"
+assert_true "its worktree is removed" "$([ ! -d "$featM" ] && echo 0 || echo 1)"
+
+# The plan is what distinguishes it from a fresh branch, so without one the
+# same shape must still be refused.
+featN="$main/.claude/worktrees/feat-n"
+git -C "$main" worktree add -q -b feat-n "$featN" main
+out=$(cd "$main" && "$se" teardown feat-n 2>&1)
+rc=$?
+assert_exit "se teardown still refuses a branch with nothing to show for it" 1 "$rc"
+assert_contains "the refusal says what it checked" "$out" "no completed plan"
+assert_true "that worktree survives" "$([ -d "$featN" ] && echo 0 || echo 1)"
+git -C "$main" worktree remove "$featN"
+git -C "$main" branch -D feat-n >/dev/null 2>&1
 
 # ============================================================ schema: env ==
 # required:true copy missing from main -> se env fails loudly.
