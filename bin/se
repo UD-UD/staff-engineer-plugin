@@ -18,6 +18,13 @@
 #                     prompts to join or start a session there. Set
 #                     SE_NO_PROMPT=1 to always skip the prompt (also
 #                     skipped automatically when not interactive).
+#
+#                     Sessions are grouped under the checkout they worked in,
+#                     which is not always the one storing their transcript: a
+#                     session that entered a worktree is listed there, marked
+#                     "started from <dir>". Each checkout shows its 3 newest
+#                     sessions, read from the 8 newest transcripts in its
+#                     project folder — anything older is not offered.
 #   env               set up this checkout from docs/architecture/worktree.json
 #                     (copy files, symlink dirs, postCreate hooks, ignore
 #                     check). Idempotent.
@@ -36,7 +43,7 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)

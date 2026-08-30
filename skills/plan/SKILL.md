@@ -104,6 +104,12 @@ precise; the version the user reads must not need a glossary.
 Once approved, in projects using the standard layout:
 
 - Save the plan to `docs/plan/<branch-name>.md` — one plan file per worktree.
+  A branch can carry characters a filename should not: replace every one
+  outside `[A-Za-z0-9._-]` with `-`, so branch
+  `worktree-fix+mobile-keyboard-and-touch` becomes
+  `worktree-fix-mobile-keyboard-and-touch.md`. `se` looks for the exact name
+  first and this flattened one second, so either resolves — but pick the
+  flattened one, or two agents will disagree about where the plan lives.
 - End the plan file with a `## TODO` checklist: one `- [ ]` item per
   implementation step. **Implementation does not start until this checklist
   exists.** Check items off as each step completes (with a one-line note when

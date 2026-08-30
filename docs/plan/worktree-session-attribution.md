@@ -164,8 +164,18 @@ Wave 2 (all `bin/se`, strictly in order):
       → verify: full suite green — 134 pass, 0 fail (baseline 124)
 
 Wave 3:
-- [ ] 8. Manual run in `fancy-chat`; resolve the open resume-directory risk
+- [x] 8. Manual run in `fancy-chat`; resolve the open resume-directory risk
       → verify: mobile session sits under its worktree; resume lands there
-- [ ] 9. `se help` gains read depth + cap; plan filename rule into
+      — board confirmed against the real repo: the mobile session is row 2
+        under its own worktree marked "started from fancy-chat", and the
+        worktree's TODO reads 6/9 where it read `-` before.
+      — RISK CLOSED: probe session created in dir A, resumed from dir B.
+        The resumed session recorded its new turns with `cwd` = B, and no
+        project folder was created for B — the transcript stays in A's
+        folder. So `cd <worktree> && claude --resume <id>` does land in the
+        worktree, and se will keep finding the transcript where it is.
+- [x] 9. `se help` gains read depth + cap; plan filename rule into
       `skills/plan` and `skills/worktree`; decision into `docs/decisions.md`
       → verify: help states both constants; rule matches what the code accepts
+      — the help range `sed -n '2,33p'` had to move to `'2,40p'`; it is a
+        hardcoded line span, so any edit to the usage block must move it.
