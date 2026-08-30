@@ -118,6 +118,36 @@ assert_not_contains "SE_NO_PROMPT=1 se does not print the picker prompt" "$out" 
 
 rm -rf "$emptyhome"
 
+# --- session lookup: Claude Code's path encoding flattens more than / and . -
+# A worktree with a `+` in its name is stored with the `+` as `-`, so a naive
+# tr '/.' '--' misses its transcripts and the board wrongly calls it fresh.
+plushome=$(mktemp -d)
+plusfeat="$main/.claude/worktrees/feat+plus"
+git -C "$main" worktree add -q -b feat-plus "$plusfeat" main
+# git reports the fully resolved path (macOS /var -> /private/var), and that
+# is what se encodes, so the fixture has to use the same form.
+plusreal=$(cd "$plusfeat" && pwd -P)
+loose=$(printf '%s' "$plusreal" | sed 's/[^A-Za-z0-9]/-/g')
+mkdir -p "$plushome/.claude/projects/$loose"
+printf '{"type":"ai-title","aiTitle":"Plus named worktree"}\n{"cwd":"%s"}\n' "$plusreal" \
+  > "$plushome/.claude/projects/$loose/session-a.jsonl"
+
+out=$(cd "$main" && HOME="$plushome" SE_NO_PROMPT=1 "$se")
+assert_contains "session found despite + flattened in the stored path" "$out" "Plus named worktree"
+assert_not_contains "the + worktree is not reported fresh" "$out" "feat+plus && claude    # feat-plus — fresh"
+
+# Same loose directory, but its transcript's cwd points somewhere else: the
+# looser match must not be trusted, or two similarly-named worktrees would
+# borrow each other's sessions.
+printf '{"type":"ai-title","aiTitle":"Someone elses session"}\n{"cwd":"/somewhere/else"}\n' \
+  > "$plushome/.claude/projects/$loose/session-a.jsonl"
+out=$(cd "$main" && HOME="$plushome" SE_NO_PROMPT=1 "$se")
+assert_not_contains "loose match rejected when the transcript cwd disagrees" "$out" "Someone elses session"
+
+git -C "$main" worktree remove "$plusfeat"
+git -C "$main" branch -D feat-plus >/dev/null 2>&1
+rm -rf "$plushome"
+
 # =================================================================== help ==
 out=$(cd "$main" && "$se" help)
 rc=$?
@@ -404,6 +434,11 @@ if [ "$have_pty" -eq 1 ]; then
   rc=$(cat "$pick_rcfile" 2>/dev/null)
   assert_exit "resume picker: q exits 0" 0 "$rc"
   assert_true "resume picker: q launches nothing" "$(launched && echo 1 || echo 0)"
+
+  # Interactive rows name the worktree; the runnable `cd ... && claude` form
+  # is for the non-interactive output, where a bare name would be useless.
+  assert_contains "picker menu names the worktree" "$out" "1  $(basename "$pickrepo")"
+  assert_not_contains "picker menu drops the full cd command" "$out" "&& claude"
 
   : > "$fakelog"
   out=$(run_picker $'zzz\nq\n')

@@ -81,6 +81,29 @@ is_rebuildable() { # relative path
   return 1
 }
 
+# Claude Code stores each directory's transcripts under
+# ~/.claude/projects/<encoded path>. The encoding flattens more than `/` and
+# `.`: a worktree named `fix+mobile-keyboard-and-touch` is stored with the
+# `+` as `-` too, so the obvious tr '/.' '--' silently misses its sessions
+# and the board claims the worktree is fresh. Try the narrow encoding first,
+# then the flatten-everything-else one, and only trust the looser match when
+# a transcript's own `cwd` says it really is this directory.
+session_dir() { # absolute path -> project dir (may not exist)
+  local p=$1 strict loose base
+  base="${HOME:-}/.claude/projects"
+  strict=$(printf '%s' "$p" | tr '/.' '--')
+  if [ -d "$base/$strict" ]; then printf '%s' "$base/$strict"; return 0; fi
+  loose=$(printf '%s' "$p" | sed 's/[^A-Za-z0-9]/-/g')
+  if [ "$loose" != "$strict" ] && [ -d "$base/$loose" ]; then
+    local newest
+    newest=$(/bin/ls -t "$base/$loose" 2>/dev/null | grep '\.jsonl$' | head -1)
+    if [ -n "$newest" ] && grep -qF "\"cwd\":\"$p\"" "$base/$loose/$newest" 2>/dev/null; then
+      printf '%s' "$base/$loose"; return 0
+    fi
+  fi
+  printf '%s' "$base/$strict"
+}
+
 trunc() { # string maxlen
   local s=$1 n=$2
   if [ "${#s}" -gt "$n" ]; then printf '%s~' "${s:0:$((n - 1))}"; else printf '%s' "$s"; fi
@@ -260,8 +283,14 @@ except Exception:
 
   anomalies=()
   resume_lines=()
+  resume_menu=()
   resume_paths=()
   resume_hassess=()
+
+  # Decided once, up front: it selects both the resume-row format and
+  # whether the picker runs. A real terminal on both ends, not suppressed.
+  will_prompt=0
+  if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ]; then will_prompt=1; fi
 
   for ((i = 0; i < ${#paths[@]}; i++)); do
     p=${paths[$i]} b=${branches[$i]}
@@ -296,8 +325,7 @@ except Exception:
     fi
 
     # --- saved sessions (durable; survives reboot) ---
-    enc=$(printf '%s' "$p" | tr '/.' '--')
-    sdir="$HOME/.claude/projects/$enc"
+    sdir=$(session_dir "$p")
     newest=$(/bin/ls -t "$sdir" 2>/dev/null | grep '\.jsonl$' | head -1)
     count=$(/bin/ls "$sdir" 2>/dev/null | grep -c '\.jsonl$')
     sess="none — fresh" sess_epoch=0
@@ -307,10 +335,12 @@ except Exception:
       [ -n "$title" ] || title="(untitled)"
       sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
       resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
+      resume_menu+=("$sess_epoch|$(basename "$p")    $(rel_age "$sess_epoch") · $(trunc "$title" 34)")
       resume_paths+=("$p")
       resume_hassess+=("1")
     else
       resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
+      resume_menu+=("0|$(basename "$p")    no saved session — starts fresh")
       resume_paths+=("$p")
       resume_hassess+=("0")
     fi
@@ -364,20 +394,24 @@ except Exception:
   width=${#resume_count}
   resume_sorted_paths=()
   resume_sorted_hassess=()
+  # Interactive: the picker acts on the number, so a full path is noise —
+  # show the worktree name. Non-interactive: the line has to be runnable,
+  # so keep the copy-paste `cd ... && claude` form.
+  if [ "$will_prompt" = "1" ]; then rows=("${resume_menu[@]}"); else rows=("${resume_lines[@]}"); fi
   printf '\nResume (most recent first):\n'
   n=0
   for idx in "${order[@]}"; do
     n=$((n + 1))
     resume_sorted_paths+=("${resume_paths[$idx]}")
     resume_sorted_hassess+=("${resume_hassess[$idx]}")
-    printf '  %*d  %s\n' "$width" "$n" "${resume_lines[$idx]#*|}"
+    printf '  %*d  %s\n' "$width" "$n" "${rows[$idx]#*|}"
   done
 
   # Interactive picker: only when it is safe to prompt — a real terminal on
   # both stdin and stdout, and not explicitly suppressed. This keeps `se`
   # pipeable, scriptable and CI-safe: any redirect or SE_NO_PROMPT=1 falls
   # straight through to `exit 0` below, printing exactly the report above.
-  if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ] && [ "$resume_count" -gt 0 ]; then
+  if [ "$will_prompt" = "1" ] && [ "$resume_count" -gt 0 ]; then
     printf '\n'
     while :; do
       printf 'Join [1-%d], n<%d> for a new session, q to quit: ' "$resume_count" "$resume_count"
