@@ -67,4 +67,4 @@ Wrap-up:
       silently ignored as intended.
 - [x] `bash tests/run.sh` green from repo root and from a different cwd
       (72/72 both times); `claude plugin validate .` green.
-- [ ] Commit, push, open PR (no AI attribution anywhere).
+- [x] Commit, push, open PR (no AI attribution anywhere).
