@@ -199,7 +199,7 @@ your-project/
 ├── scratchpad/            # gitignored agent sandbox (baselines, artifacts, scripts)
 ├── docs/
 │   ├── architecture/      # complete overview: data flow, control flow,
-│   │                      # dev-environment.md, worktree.json (sync + hooks + baseline.commands)
+│   │                      # dev-environment.md, worktree.json (copy/symlink/postCreate/preDelete/baseline)
 │   ├── decisions.md       # decision log, newest first
 │   └── plan/              # one implementation plan per worktree
 └── src/ …
