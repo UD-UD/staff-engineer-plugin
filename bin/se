@@ -8,7 +8,11 @@
 # usage: se [status|env|baseline|teardown <name>|debt|help]
 #
 #   status            status board (default): worktrees, TODO progress,
-#                     resume commands, anomalies
+#                     resume commands, anomalies. The resume list is a
+#                     numbered menu; when stdin+stdout are both a tty it
+#                     prompts to join or start a session there. Set
+#                     SE_NO_PROMPT=1 to always skip the prompt (also
+#                     skipped automatically when not interactive).
 #   env               set up this checkout from docs/architecture/worktree.json
 #                     (copy files, symlink dirs, postCreate hooks, ignore
 #                     check). Idempotent.
@@ -27,7 +31,7 @@ set -u
 case "${1:-status}" in
   status|env|baseline|teardown|debt) ;;
   help|-h|--help)
-    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
@@ -203,6 +207,38 @@ while IFS= read -r line; do
 done < <(git -C "$root" worktree list --porcelain)
 main_checkout=${paths[0]:-$root}
 
+# Launch Claude Code for one resume-menu row. n: 1-based index into the
+# resume_sorted_* arrays cmd_status built. mode: "join" (that row's saved
+# session, falling back to a fresh session when it has none — same as the
+# row's own printed text) or "new" (always a fresh session).
+resume_launch() {
+  local n=$1 mode=$2 idx p hassess use_continue
+  idx=$((n - 1))
+  p=${resume_sorted_paths[$idx]}
+  hassess=${resume_sorted_hassess[$idx]}
+  use_continue=0
+  [ "$mode" = "join" ] && [ "$hassess" = "1" ] && use_continue=1
+
+  if ! command -v claude >/dev/null 2>&1; then
+    if [ "$use_continue" = "1" ]; then
+      echo "se: claude not found on PATH — run this yourself: cd $p && claude --continue" >&2
+    else
+      echo "se: claude not found on PATH — run this yourself: cd $p && claude" >&2
+    fi
+    exit 1
+  fi
+
+  if [ "$use_continue" = "1" ]; then
+    printf '→ cd %s && claude --continue\n' "$p"
+    cd "$p" || exit 1
+    exec claude --continue
+  else
+    printf '→ cd %s && claude\n' "$p"
+    cd "$p" || exit 1
+    exec claude
+  fi
+}
+
 cmd_status() {
   # Live overlay: cwds of running claude sessions (empty after reboot — fine).
   running_cwds=""
@@ -224,6 +260,8 @@ except Exception:
 
   anomalies=()
   resume_lines=()
+  resume_paths=()
+  resume_hassess=()
 
   for ((i = 0; i < ${#paths[@]}; i++)); do
     p=${paths[$i]} b=${branches[$i]}
@@ -269,8 +307,12 @@ except Exception:
       [ -n "$title" ] || title="(untitled)"
       sess="$(rel_age "$sess_epoch") · $(trunc "$title" 34) ($count)"
       resume_lines+=("$sess_epoch|cd $p && claude --continue    # $b")
+      resume_paths+=("$p")
+      resume_hassess+=("1")
     else
       resume_lines+=("0|cd $p && claude    # $b — fresh, no saved session")
+      resume_paths+=("$p")
+      resume_hassess+=("0")
     fi
     is_running "$p" && sess="$sess ● running"
 
@@ -307,9 +349,66 @@ except Exception:
     for ((i = 0; i < ${#anomalies[@]}; i++)); do printf '  ! %s\n' "${anomalies[$i]}"; done
   fi
 
+  # Sort resume rows by epoch (most recent first), same ordering the old
+  # print pipeline produced, but keep it indexable: order[] holds the
+  # original resume_lines/resume_paths/resume_hassess index for each
+  # position, so the picker below can act on a plain 1-based number.
+  order=()
+  while IFS= read -r idx; do order+=("$idx"); done < <(
+    for ((i = 0; i < ${#resume_lines[@]}; i++)); do
+      printf '%s\t%d\n' "${resume_lines[$i]%%|*}" "$i"
+    done | sort -t $'\t' -k1,1rn | cut -f2
+  )
+
+  resume_count=${#order[@]}
+  width=${#resume_count}
+  resume_sorted_paths=()
+  resume_sorted_hassess=()
   printf '\nResume (most recent first):\n'
-  for ((i = 0; i < ${#resume_lines[@]}; i++)); do printf '%s\n' "${resume_lines[$i]}"; done |
-    sort -t'|' -k1,1rn | cut -d'|' -f2- | sed 's/^/  /'
+  n=0
+  for idx in "${order[@]}"; do
+    n=$((n + 1))
+    resume_sorted_paths+=("${resume_paths[$idx]}")
+    resume_sorted_hassess+=("${resume_hassess[$idx]}")
+    printf '  %*d  %s\n' "$width" "$n" "${resume_lines[$idx]#*|}"
+  done
+
+  # Interactive picker: only when it is safe to prompt — a real terminal on
+  # both stdin and stdout, and not explicitly suppressed. This keeps `se`
+  # pipeable, scriptable and CI-safe: any redirect or SE_NO_PROMPT=1 falls
+  # straight through to `exit 0` below, printing exactly the report above.
+  if [ -t 0 ] && [ -t 1 ] && [ -z "${SE_NO_PROMPT:-}" ] && [ "$resume_count" -gt 0 ]; then
+    printf '\n'
+    while :; do
+      printf 'Join [1-%d], n<%d> for a new session, q to quit: ' "$resume_count" "$resume_count"
+      IFS= read -r choice || exit 0
+      case "$choice" in
+        ''|q|Q) exit 0 ;;
+        [nN]*)
+          rest=${choice#?}
+          rest=${rest# }
+          case "$rest" in
+            ''|*[!0-9]*) printf 'not a valid choice\n'; continue ;;
+          esac
+          if [ "$rest" -ge 1 ] && [ "$rest" -le "$resume_count" ]; then
+            resume_launch "$rest" new
+          else
+            printf 'not a valid choice\n'
+          fi
+          ;;
+        *)
+          case "$choice" in
+            *[!0-9]*) printf 'not a valid choice\n'; continue ;;
+          esac
+          if [ "$choice" -ge 1 ] && [ "$choice" -le "$resume_count" ]; then
+            resume_launch "$choice" join
+          else
+            printf 'not a valid choice\n'
+          fi
+          ;;
+      esac
+    done
+  fi
 
   exit 0
 }

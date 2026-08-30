@@ -25,6 +25,13 @@ assert_contains() { # desc haystack needle
   esac
 }
 
+assert_not_contains() { # desc haystack needle
+  case "$2" in
+    *"$3"*) notok "$1 (unexpectedly present: $3)" ;;
+    *) ok "$1" ;;
+  esac
+}
+
 assert_true() { # desc [ test-expr result ]
   if [ "$2" = "0" ]; then ok "$1"; else notok "$1"; fi
 }
@@ -96,6 +103,19 @@ out=$(cd "$main" && HOME="$emptyhome" "$se")
 rc=$?
 assert_exit "se status exits 0" 0 "$rc"
 assert_contains "se status prints a BRANCH header" "$out" "BRANCH"
+
+# resume list is a numbered menu, but non-interactive runs (stdin/stdout not
+# a tty, as every `$(...)` capture in this suite is) never prompt.
+assert_contains "se status numbers resume line 1" "$out" "  1  cd "
+assert_contains "se status numbers resume line 2" "$out" "  2  cd "
+assert_not_contains "se status (non-interactive) does not print the picker prompt" "$out" "Join ["
+
+out=$(cd "$main" && HOME="$emptyhome" SE_NO_PROMPT=1 "$se")
+rc=$?
+assert_exit "SE_NO_PROMPT=1 se exits 0" 0 "$rc"
+assert_contains "SE_NO_PROMPT=1 se numbers resume line 1" "$out" "  1  cd "
+assert_not_contains "SE_NO_PROMPT=1 se does not print the picker prompt" "$out" "Join ["
+
 rm -rf "$emptyhome"
 
 # =================================================================== help ==
@@ -105,6 +125,7 @@ assert_exit "se help exits 0" 0 "$rc"
 for sub in status env baseline teardown debt help; do
   assert_contains "se help mentions '$sub'" "$out" "$sub"
 done
+assert_contains "se help mentions SE_NO_PROMPT" "$out" "SE_NO_PROMPT"
 
 out=$(cd "$main" && "$se" bogus 2>&1)
 rc=$?
@@ -323,6 +344,93 @@ out=$(cd "$cleanrepo" && "$se" debt)
 rc=$?
 assert_exit "se debt exits 0 (clean repo)" 0 "$rc"
 assert_contains "se debt reports a clean ledger" "$out" "No se-debt markers. Clean ledger."
+
+# ============================================================ resume picker =
+# `se status`'s resume menu prompts interactively only when stdin+stdout are
+# both a real terminal. Drive it through a pty (macOS `script`) so the tty
+# checks pass, with a fake `claude` on PATH so nothing real ever launches.
+pickrepo="$tmpdir/pickrepo"
+mkdir -p "$pickrepo"
+git -C "$pickrepo" init -q -b main
+git -C "$pickrepo" config user.email test@example.com
+git -C "$pickrepo" config user.name Test
+printf '# fixture\n' > "$pickrepo/README.md"
+git -C "$pickrepo" add -A
+git -C "$pickrepo" commit -q -m init
+pickrepo_real=$(cd "$pickrepo" && pwd -P)
+
+# A saved session for the (only) worktree, so its resume row is "join ->
+# --continue" rather than "fresh, no saved session".
+pickhome=$(mktemp -d)
+pick_enc=$(printf '%s' "$pickrepo_real" | tr '/.' '--')
+mkdir -p "$pickhome/.claude/projects/$pick_enc"
+printf '{"aiTitle":"pick test session"}\n' > "$pickhome/.claude/projects/$pick_enc/sess1.jsonl"
+
+fakebin="$tmpdir/fakebin"
+mkdir -p "$fakebin"
+fakelog="$tmpdir/fake-claude.log"
+cat > "$fakebin/claude" <<CLAUDEEOF
+#!/bin/sh
+{
+  echo "cwd:\$(pwd -P)"
+  echo "args:\$*"
+} >> "$fakelog"
+CLAUDEEOF
+chmod +x "$fakebin/claude"
+
+pick_rcfile="$tmpdir/pick-rc"
+run_picker() { # $1 = stdin to feed the pty
+  # The trailing sleep keeps the write end of the pipe open a moment after
+  # the input is written: `script` tears the pty down as soon as its own
+  # stdin hits EOF, which otherwise races the child's `read` and can kill it
+  # before the input is ever consumed.
+  { printf '%s' "$1"; sleep 0.5; } | script -q /dev/null sh -c "cd '$pickrepo' || exit 1; PATH='$fakebin:'\"\$PATH\" HOME='$pickhome' '$se'; echo \$? > '$pick_rcfile'" 2>&1
+}
+
+# A real resume_launch call always logs args exactly "" (bare `claude`) or
+# "--continue" — distinct from the harmless `claude agents --json` probe
+# cmd_status's live overlay also makes through the same fake claude on PATH.
+launched() { grep -qE '^args:(--continue)?$' "$fakelog"; }
+
+have_pty=0
+if command -v script >/dev/null 2>&1; then
+  ptytest=$(script -q /dev/null sh -c '[ -t 0 ] && [ -t 1 ] && echo PTY_OK' 2>/dev/null)
+  case "$ptytest" in *PTY_OK*) have_pty=1 ;; esac
+fi
+
+if [ "$have_pty" -eq 1 ]; then
+  : > "$fakelog"
+  out=$(run_picker $'q\n')
+  rc=$(cat "$pick_rcfile" 2>/dev/null)
+  assert_exit "resume picker: q exits 0" 0 "$rc"
+  assert_true "resume picker: q launches nothing" "$(launched && echo 1 || echo 0)"
+
+  : > "$fakelog"
+  out=$(run_picker $'zzz\nq\n')
+  rc=$(cat "$pick_rcfile" 2>/dev/null)
+  assert_exit "resume picker: invalid choice then q exits 0" 0 "$rc"
+  assert_contains "resume picker: invalid choice re-prompts" "$out" "not a valid choice"
+  assert_true "resume picker: invalid choice then q launches nothing" "$(launched && echo 1 || echo 0)"
+
+  : > "$fakelog"
+  run_picker $'1\n' >/dev/null
+  log=$(cat "$fakelog" 2>/dev/null)
+  assert_contains "resume picker: choosing 1 invokes claude --continue" "$log" "args:--continue"
+  assert_contains "resume picker: choosing 1 launches in the right directory" "$log" "cwd:$pickrepo_real"
+
+  : > "$fakelog"
+  run_picker $'n1\n' >/dev/null
+  log=$(cat "$fakelog" 2>/dev/null)
+  assert_true "resume picker: n1 invokes claude" "$(launched && echo 0 || echo 1)"
+  assert_not_contains "resume picker: n1 invokes claude with no --continue" "$log" "args:--continue"
+  assert_contains "resume picker: n1 launches in the right directory" "$log" "cwd:$pickrepo_real"
+else
+  printf 'SKIP - resume picker: q exits 0 and launches nothing (no pty available)\n'
+  printf 'SKIP - resume picker: invalid choice re-prompts (no pty available)\n'
+  printf 'SKIP - resume picker: choosing 1 invokes claude --continue in the right directory (no pty available)\n'
+  printf 'SKIP - resume picker: n1 invokes claude with no --continue in the right directory (no pty available)\n'
+fi
+rm -rf "$pickhome"
 
 printf 'RESULT pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

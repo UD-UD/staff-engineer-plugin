@@ -71,7 +71,9 @@ rehash                                                        # zsh: refresh ope
 
 Point the link at a git clone and `git pull` keeps the command current. (An
 `alias se=...` in your shell rc also works, but won't resolve inside scripts
-or non-interactive shells.)
+or non-interactive shells.) Installed from GitHub via `/plugin install`
+there's no local clone to point at — so the first session prints the exact
+`ln -s` command for wherever the plugin actually landed.
 
 After editing the plugin: `claude plugin validate .` and `/reload-plugins`.
 
