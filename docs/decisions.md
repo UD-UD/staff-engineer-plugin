@@ -2,6 +2,19 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-09-20 — The plugin repo runs its own baseline
+
+**Decided.** `docs/architecture/worktree.json` exists here with one
+baseline entry, `bash tests/run.sh`. The worktree skill requires a baseline
+the moment a worktree is created, and this repo had nothing for
+`se baseline` to run, so every worktree on the plugin itself started with
+"no baseline entries" and the rule was being honoured by hand.
+
+**Rejected — leaving it out because the suite is fast to run manually.**
+The point of the baseline is the recorded count to compare against, not
+the time saved; a rule the plugin enforces on other repos should hold on
+its own.
+
 ## 2026-08-30 — Sessions are filed under the worktree they worked in
 
 **Decided.** `se status` attributes a session to a checkout by reading the
