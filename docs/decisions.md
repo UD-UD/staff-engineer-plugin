@@ -2,6 +2,37 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-09-20 — The board flags a merged branch whose plan has unticked items
+
+**Decided.** `se status` adds a red anomaly line, "MERGED with N unticked
+plan item(s)", when a branch is merged and its plan still has open
+checkboxes. The existing teardown recommendation stays beside it, and no
+teardown gate changes. The line exists because the board's NEXT STEP column
+was confidently pointing at work that had already shipped: a merged branch
+with a lying checklist looked exactly like one with a finished plan.
+
+**Rejected — withholding the teardown recommendation until the plan is
+ticked.** Cleaner to read, but the board would then refuse to recommend what
+`se teardown` accepts, and PR #12 settled that the two never disagree. The
+fix for a lying checklist is to tick it.
+
+**Rejected — making `se teardown` refuse on unticked items.** That changes
+the safety contract of a gate that was just settled, for a problem that is
+about the record being truthful, not about losing files.
+
+## 2026-09-20 — The plugin repo runs its own baseline
+
+**Decided.** `docs/architecture/worktree.json` exists here with one
+baseline entry, `bash tests/run.sh`. The worktree skill requires a baseline
+the moment a worktree is created, and this repo had nothing for
+`se baseline` to run, so every worktree on the plugin itself started with
+"no baseline entries" and the rule was being honoured by hand.
+
+**Rejected — leaving it out because the suite is fast to run manually.**
+The point of the baseline is the recorded count to compare against, not
+the time saved; a rule the plugin enforces on other repos should hold on
+its own.
+
 ## 2026-08-30 — Sessions are filed under the worktree they worked in
 
 **Decided.** `se status` attributes a session to a checkout by reading the

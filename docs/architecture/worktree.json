@@ -1,0 +1,6 @@
+{
+  "baseline": [
+    {"run": "bash tests/run.sh",
+     "why": "The whole suite (se board, git-guard hook, path nudge) in a few seconds; the count to beat before touching anything."}
+  ]
+}

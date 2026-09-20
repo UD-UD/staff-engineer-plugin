@@ -539,6 +539,43 @@ assert_true "that worktree survives" "$([ -d "$featN" ] && echo 0 || echo 1)"
 git -C "$main" worktree remove "$featN"
 git -C "$main" branch -D feat-n >/dev/null 2>&1
 
+# --- status: merged, but the plan still has unticked items ------------------
+# A branch that merged with open checklist items looks, on the board, exactly
+# like one whose plan is finished — and NEXT STEP then points at work that
+# may already have shipped. Either the checklist is lying or something went
+# out unfinished; both deserve their own line. The teardown recommendation
+# stays: the tool accepts this branch, and the board never contradicts it.
+featP="$main/.claude/worktrees/feat-p"
+git -C "$main" worktree add -q -b feat-p "$featP" main
+mkdir -p "$featP/docs/plan"
+printf '# plan\n\n## TODO\n- [x] 1. the work\n- [ ] 2. browser tests\n' > "$featP/docs/plan/feat-p.md"
+git -C "$featP" add docs/plan/feat-p.md
+git -C "$featP" commit -q -m "feat-p: plan"
+git -C "$main" merge -q --no-ff -m "merge feat-p" feat-p >/dev/null
+# The control: same shape, every item ticked. Built here rather than reusing
+# feat-m, whose worktree the teardown test above has already removed.
+featQ="$main/.claude/worktrees/feat-q"
+git -C "$main" worktree add -q -b feat-q "$featQ" main
+mkdir -p "$featQ/docs/plan"
+printf '# plan\n\n## TODO\n- [x] 1. the work\n- [x] 2. browser tests\n' > "$featQ/docs/plan/feat-q.md"
+git -C "$featQ" add docs/plan/feat-q.md
+git -C "$featQ" commit -q -m "feat-q: plan"
+git -C "$main" merge -q --no-ff -m "merge feat-q" feat-q >/dev/null
+
+out=$(cd "$main" && SE_COLOR=never "$se" 2>&1)
+assert_contains "a merged branch with open plan items gets its own anomaly line" \
+  "$out" "feat-p — MERGED with 1 unticked plan item"
+assert_contains "the teardown recommendation still appears alongside it" \
+  "$out" "se teardown feat-p"
+assert_contains "the fully ticked control is still recommended for teardown" \
+  "$out" "se teardown feat-q"
+assert_not_contains "a merged branch with a finished plan is not flagged as unticked" \
+  "$out" "feat-q — MERGED with"
+git -C "$main" worktree remove "$featP"
+git -C "$main" branch -D feat-p >/dev/null 2>&1
+git -C "$main" worktree remove "$featQ"
+git -C "$main" branch -D feat-q >/dev/null 2>&1
+
 # ============================================================ schema: env ==
 # required:true copy missing from main -> se env fails loudly.
 reqrepo="$tmpdir/reqrepo"
