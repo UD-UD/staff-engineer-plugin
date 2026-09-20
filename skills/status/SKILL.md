@@ -16,6 +16,11 @@ The board is deterministic — never re-derive by hand what the script prints.
 3. Your job is what the script can't do — act on its anomaly lines when the
    user wants:
    - merged-but-not-torn-down → safe teardown (worktree skill, step 5).
+   - MERGED with unticked plan items → the checklist and the merge disagree.
+     Check each open item against what actually landed: tick the ones that
+     shipped (with a one-line note), and report any that really did not —
+     before the teardown, never after, since the merged plan file is the
+     record of what was built.
    - no plan file → offer `/se:plan`.
    - stale worktrees → ask if abandoned; never tear down on your own.
    - a dirty worktree with no saved session → its sessions may live under a

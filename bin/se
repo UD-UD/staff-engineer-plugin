@@ -454,7 +454,7 @@ except Exception:
     commit_epoch=$(git -C "$p" log -1 --format=%ct 2>/dev/null || echo 0)
 
     # --- plan TODO progress ---
-    todo="-" next="-" todocolor="$C_DIM"
+    todo="-" next="-" todocolor="$C_DIM" open_n=0
     if [ "$b" != "$base" ] && [ "$b" != "(detached)" ]; then
       plan=$(plan_file "$p" "$b")
       if [ -n "$plan" ]; then
@@ -512,6 +512,13 @@ except Exception:
         else
           anomalies+=("$b — merged into $base but worktree still exists → run \`se teardown $wtname\`")
         fi
+        # Merged with open checklist items: either the checklist is lying
+        # (done, never ticked) or something shipped unfinished. The teardown
+        # line above stays — the tool accepts this branch, and the board
+        # never contradicts the tool.
+        if [ "$open_n" -gt 0 ]; then
+          anomalies+=("$b — MERGED with $open_n unticked plan item(s): tick them, or something shipped unfinished")
+        fi
       elif safe_to_teardown "$p" "$b"; then
         anomalies+=("$b — TODO complete and branch merged → run \`se teardown $wtname\`")
       fi
@@ -530,7 +537,7 @@ except Exception:
       # Red for anything about losing work, yellow for every other anomaly.
       acolor="$C_YELLOW"
       case "${anomalies[$i]}" in
-        *"uncommitted file(s)"*) acolor="$C_RED" ;;
+        *"uncommitted file(s)"*|*"unticked plan item(s)"*) acolor="$C_RED" ;;
       esac
       printf '  %s! %s%s\n' "$acolor" "${anomalies[$i]}" "$C_RESET"
     done

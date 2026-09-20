@@ -2,6 +2,24 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-09-20 — The board flags a merged branch whose plan has unticked items
+
+**Decided.** `se status` adds a red anomaly line, "MERGED with N unticked
+plan item(s)", when a branch is merged and its plan still has open
+checkboxes. The existing teardown recommendation stays beside it, and no
+teardown gate changes. The line exists because the board's NEXT STEP column
+was confidently pointing at work that had already shipped: a merged branch
+with a lying checklist looked exactly like one with a finished plan.
+
+**Rejected — withholding the teardown recommendation until the plan is
+ticked.** Cleaner to read, but the board would then refuse to recommend what
+`se teardown` accepts, and PR #12 settled that the two never disagree. The
+fix for a lying checklist is to tick it.
+
+**Rejected — making `se teardown` refuse on unticked items.** That changes
+the safety contract of a gate that was just settled, for a problem that is
+about the record being truthful, not about losing files.
+
 ## 2026-09-20 — The plugin repo runs its own baseline
 
 **Decided.** `docs/architecture/worktree.json` exists here with one
