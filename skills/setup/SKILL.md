@@ -1,6 +1,7 @@
 ---
 name: setup
-description: Use when starting a new project, adopting the se workflow in an existing one, or asked to "set up this repo", "adopt se", or "clean up this repo for se". Scaffolds the standard layout (scratchpad/, docs/architecture/, docs/decisions.md, docs/plan/, thin CLAUDE.md) and, for existing repos, runs a cleanup adoption pass - worktree triage, CLAUDE.md migration, plan backfill, and a main baseline.
+description: Scaffold the se layout (scratchpad/, docs/architecture/, docs/decisions.md, docs/plan/, thin CLAUDE.md) in a new project, or adopt se in an existing repo with a cleanup pass - worktree triage, CLAUDE.md migration, plan backfill, main baseline. Run once per repo.
+disable-model-invocation: true
 ---
 
 # Standard Project Layout
@@ -13,6 +14,7 @@ Every project is self-contained in its directory:
 ├── scratchpad/            # gitignored agent sandbox
 ├── docs/
 │   ├── architecture/      # complete overview: data flow, control flow, mappings
+│   │   └── glossary.md    # project vocabulary: term, meaning, avoid-list (created lazily)
 │   ├── decisions.md       # reverse-chronological decision log
 │   └── plan/              # implementation plans, exactly one per worktree
 └── <source, tests, config...>
@@ -33,6 +35,20 @@ Every project is self-contained in its directory:
   entries, each annotated with why it's there — the worktree skill creates
   and maintains it). If understanding the project requires reading source
   cold, this folder is incomplete.
+- **`docs/architecture/glossary.md`** — this project's vocabulary: one line
+  per term, its meaning, and an `Avoid:` list of synonyms not to use.
+  Project-specific terms only, never general programming concepts. Created
+  lazily, not scaffolded up front: `/se:plan` and the `explainer` agent read
+  it when it's present, and it gains a term the first time a fuzzy word gets
+  settled. Example:
+
+  ```markdown
+  **Worktree**: a checkout of one feature branch under `.claude/worktrees/`.
+  _Avoid_: branch folder, sandbox
+
+  **Board**: the `se status` table of worktrees, sessions, and anomalies.
+  _Avoid_: dashboard, report
+  ```
 - **`docs/decisions.md`** — every significant planning or implementation
   decision, newest first (template below). Append when a decision is made,
   not at the end of the project.
@@ -50,17 +66,24 @@ without asking.
    `.claude/worktrees/`, so make sure it's ignored: if
    `git check-ignore -q .claude/worktrees` fails, append `.claude/worktrees/`
    to `.git/info/exclude`.
+   Done when: the four directories exist, `git check-ignore -q scratchpad`
+   and `git check-ignore -q .claude/worktrees` both succeed.
 2. Start `docs/decisions.md` with the entry format:
 
    ```markdown
    # Decision Log
-   Newest first. Append an entry whenever a significant decision is made.
+   Newest first. Append an entry only when the decision is hard to reverse,
+   surprising to a future reader without the context, and the result of a
+   real trade-off; anything else stays in the plan file.
 
    ## YYYY-MM-DD — <decision title>
    **Decision:** what was decided.
    **Why:** the driving constraint or goal.
    **Rejected:** alternatives considered and why they lost.
    ```
+
+   Done when: `docs/decisions.md` exists with the header and entry format
+   above, ready for its first entry.
 
 3. Write the `CLAUDE.md` thin shim (or trim an existing fat one — with the
    user's approval, moving its content into `docs/`):
@@ -72,6 +95,7 @@ without asking.
 
    ## Where things live
    - Architecture & complete overview: `docs/architecture/`
+   - Project vocabulary (when present): `docs/architecture/glossary.md`
    - Decision log (newest first): `docs/decisions.md`
    - Implementation plans (one per worktree): `docs/plan/`
    - Agent sandbox (gitignored): `scratchpad/`
@@ -85,6 +109,8 @@ without asking.
    - `/se:worktree` when starting any feature or significant change
    - `/se:plan` before implementing anything non-trivial
    - `/se:test` whenever behavior changes or tests fail
+   - `/se:debug` when something is broken, throwing, flaky, or slow (build
+     the feedback loop before any theory)
    - `/se:review` before every commit; `/se:commit` to commit; `/se:pr` for PRs
 
    Also:
@@ -95,8 +121,13 @@ without asking.
    - Keep this file a thin shim — details belong in `docs/`.
    ```
 
+   Done when: `CLAUDE.md` at the project root matches the shim template,
+   with every pointer resolving to a real file.
+
 4. For an existing project, run the full adoption pass below instead of
    just scaffolding.
+   Done when: the adoption pass (steps 1-7 below) has been run to
+   completion, or the user has explicitly deferred it.
 
 ## Adopting an existing repo
 
@@ -111,7 +142,13 @@ has seen the list and approved it. The order matters.
   `.gitignore`, and how dev/test actually runs (package.json scripts,
   Makefile, compose files).
 - Present the findings in three groups: worktrees to triage, layout gaps,
-  CLAUDE.md state. Then act group by group, on approval.
+  CLAUDE.md state. Then call the Skill tool with "grill" to work through the
+  decisions the audit raises (which worktrees to keep, where fat CLAUDE.md
+  content should go) — rounds with recommended answers, not a wall of
+  questions. Then act group by group, on approval.
+
+Done when: the three groups have been presented and the grilling round has
+settled the audit's open decisions.
 
 ### 2. Worktree triage — the cleanup
 
@@ -129,6 +166,9 @@ Sibling-directory worktrees (`../<repo>-<feature>`) get the same triage as
 ones under `.claude/worktrees/`. Never relocate a surviving worktree — the
 `.claude/worktrees/` convention applies to *new* worktrees only.
 
+Done when: every worktree from step 1's inventory has one of the four
+verdicts, and torn-down worktrees are gone from `git worktree list`.
+
 ### 3. Scaffold the layout
 
 Same pieces as a new project (`scratchpad/` + gitignore entry,
@@ -138,6 +178,9 @@ are and index them from `docs/architecture/README.md`. Seed
 `docs/decisions.md` with its first entry: adopting the se workflow, plus
 every triage verdict from step 2.
 
+Done when: the standard layout exists (folded with any pre-existing docs,
+not duplicated) and `docs/decisions.md` has its first entry.
+
 ### 4. Slim the CLAUDE.md
 
 A fat CLAUDE.md (hundreds of lines) migrates: split its content into
@@ -145,6 +188,9 @@ A fat CLAUDE.md (hundreds of lines) migrates: split its content into
 (template above) pointing at the new homes. Show the mapping — old section
 → new file — and get approval before moving. Content is **moved, never
 dropped**.
+
+Done when: `CLAUDE.md` matches the thin shim template and every section of
+the old fat file has a named new home under `docs/`.
 
 ### 5. Seed the machine-readable setup
 
@@ -155,11 +201,17 @@ dropped**.
   which hardcoded ports/DB paths must become env-configurable before
   worktrees can run in parallel — propose those as separate small changes.
 
+Done when: `docs/architecture/worktree.json` and `dev-environment.md` both
+exist and describe how this repo actually runs, not a generic template.
+
 ### 6. Baseline main
 
 Run the test suite once on main; record results in
 `scratchpad/baseline-main.md`. From adoption day forward those failures
 belong to main — no feature inherits blame for them.
+
+Done when: `scratchpad/baseline-main.md` exists with the recorded pass/fail
+counts from the run on main.
 
 ### 7. Verify and land
 
@@ -167,6 +219,9 @@ Run `se` again: remaining anomalies should be only what the user chose to
 keep. Then land the adoption like any other change — a feature branch
 (e.g. `chore/adopt-se`) and a PR, never a direct commit to main. The
 guardrails apply from day one, including to the adoption itself.
+
+Done when: `se` shows no anomalies beyond what the user chose to keep, and
+the adoption itself has landed as a merged PR from its own branch.
 
 ## Keeping it alive
 

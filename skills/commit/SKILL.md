@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Use when committing changes, or asked to "commit this". Enforces atomic commits with conventional messages - inspects the actual diff first, splits unrelated changes, scans for secrets and debug leftovers, and never bypasses commit hooks.
+description: Commit changes - "commit this", or any commit. Atomic conventional commits - inspects the actual diff first, splits unrelated changes, scans for secrets and debug leftovers, and never bypasses commit hooks.
 ---
 
 # Disciplined Commits
@@ -15,20 +15,29 @@ explained, and clean.
 Run `git status` and `git diff` (and `git diff --staged` if anything is
 already staged). Never commit based on what you *remember* changing.
 
+**Done when:** you have read the actual diff, not just the file list.
+
 ### 2. Scan the diff for things that must not land
 
 - Secrets: keys, tokens, passwords, connection strings, `.env` content.
 - Debug leftovers: print/console statements added for debugging, commented-out
-  code, TODO-hacks, disabled tests.
+  code, TODO-hacks, disabled tests, and `[DEBUG-xxxx]`-tagged log lines from
+  the debug skill — the git guard refuses the commit while one survives, so
+  remove them rather than working around it.
 - Unrelated drive-by edits that snuck in.
 
 If found, stop and remove them (or ask, if intent is unclear) before staging.
+
+**Done when:** the diff has no secrets, no debug leftovers, and no
+unrelated edits.
 
 ### 3. Split unrelated changes
 
 If the diff contains more than one logical change (a feature + an unrelated
 rename, a fix + a formatting sweep), stage and commit them **separately**.
 Refuse to bundle; say what the split is.
+
+**Done when:** each staged change is one logical change.
 
 ### 4. Write the message
 
@@ -45,6 +54,9 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `ci`.
 The summary says what the change does ("add retry to sync client"), the body
 says why. Reference issue/ticket IDs when the project uses them.
 
+**Done when:** the message has a conventional type, a summary under 72
+chars, and a body that says why.
+
 ### 5. Respect the guardrails
 
 - **No agent authorship.** Never add `Co-Authored-By: Claude`,
@@ -57,3 +69,6 @@ says why. Reference issue/ticket IDs when the project uses them.
 - Stage specific paths (`git add <file>...`) rather than `git add -A` when
   the working tree contains unrelated changes.
 - Do not push unless the user asked for a push.
+
+**Done when:** the commit lands with hooks intact, no AI attribution, and
+no unintended push.

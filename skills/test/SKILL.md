@@ -1,6 +1,6 @@
 ---
 name: test
-description: Use whenever changing behavior, fixing a bug, or dealing with failing tests - including "write tests" or "why is this test failing". Enforces testing discipline - every behavior change ships with a test, bug fixes start with a failing regression test, the right test level is chosen, and tests are never weakened to make them pass.
+description: Test discipline whenever behavior changes, a bug is fixed, or tests fail - "write tests", "why is this test failing". Every behavior change ships with a test at the right level, bugs start with a failing regression test, and tests are never weakened to pass.
 ---
 
 # Testing Discipline
@@ -47,6 +47,12 @@ more precise, and less flaky:
 Follow the project's existing test layout, runner, and naming conventions —
 discover them (look at neighboring test files) before writing anything.
 
+**Agree the seam first.** A seam is the public boundary a test watches —
+the interface a real caller uses, not the internals behind it. Before
+writing a test, name the seam it observes behavior at; when the change is
+non-trivial, confirm that seam with the user first. Tests live at seams,
+never against internals.
+
 ### Never write a weak test
 
 A test that cannot fail is worse than no test — it certifies nothing and
@@ -58,6 +64,22 @@ costs maintenance forever.
   exercises the mocks.
 - Cover the edge and error paths the change actually introduces, not a
   single happy path for show.
+
+Three named anti-patterns to watch for:
+
+- **Tautological.** A good expected value comes from an independent source —
+  a known literal, a worked example, the spec. The tell: the expected value
+  is computed the same way the code computes it
+  (`expect(sum(items)).toBe(items.reduce(...))`), so the test passes by
+  construction and can never disagree with the code.
+- **Side-channel verification.** A good test verifies through the interface
+  the caller actually uses. The tell: it checks the database or filesystem
+  directly instead of reading the result back through that interface, so it
+  breaks on refactors that change nothing observable.
+- **Horizontal slicing.** A good cycle is one test, then the implementation
+  that makes it pass, repeated. The tell: all the tests get written first
+  and the code after, so the tests verify imagined behaviour instead of
+  behaviour the implementation actually settled on.
 
 ### Never weaken a test to get green
 

@@ -1,6 +1,6 @@
 ---
 name: status
-description: Use when picking work back up after a break, reboot, or context switch - "where was I", "what's in flight", "resume work", "which worktrees" - or to see every worktree and how to resume each Claude Code session. Runs the plugin's deterministic `se` command and helps act on what it reports.
+description: Status - "where was I", "what's in flight", "resume work", "which worktrees", or picking work back up after a break, reboot, or context switch. Runs the plugin's deterministic `se` board and helps act on what it reports.
 ---
 
 # Status Board (thin wrapper)
@@ -31,3 +31,12 @@ The board is deterministic — never re-derive by hand what the script prints.
 4. To resume a session other than the most recent one in a worktree:
    `cd <worktree> && claude --resume` opens that directory's session picker
    (`--fork-session` revisits one without advancing it).
+5. At a stage gate the user may also be choosing what to do with the
+   session's context; offer the options in this order and stop at the first
+   that fits:
+   - continue in this session — the next stage needs this one's reasoning
+     verbatim, and there is room.
+   - `/compact` with an instruction naming what the next stage needs —
+     relevant context, but the window is filling.
+   - a fresh session from the plan file — nothing here matters to what's
+     next, the TODO checklist is the hand-off.

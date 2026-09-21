@@ -101,4 +101,19 @@ if [[ "$lc_cmd" =~ git[[:space:]]+worktree[[:space:]]+remove ]]; then
   fi
 fi
 
+# --- Rule 6: no debug tags in the working tree ------------------------------
+# Debug markers use a 4-hex-char suffix (e.g. printf '[DEBUG-%s]' a4f2) so
+# they're easy to grep for and unlikely to appear by accident. Hex in either
+# case, since a tag typed with capitals is the same tag. Checks tracked and
+# untracked-not-ignored files, so a stray marker in a new file can't slip
+# through either, and scans from the repo root (':/') because the commit
+# stages the whole index however deep the cwd is.
+if [[ "$lc_cmd" =~ git[[:space:]]+commit ]]; then
+  hits=$(git -C "${cwd:-.}" grep -lE --untracked -e '\[DEBUG-[0-9a-fA-F]{4}\]' -- :/ 2>/dev/null)
+  if [ -n "$hits" ]; then
+    block "Blocked: debug tags found in the working tree. Remove them before committing:
+$hits"
+  fi
+fi
+
 exit 0

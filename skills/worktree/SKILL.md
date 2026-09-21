@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Use when starting any new feature or significant change, or asked to "start a feature" or begin a "new feature". Creates a dedicated git worktree off main (never commit to main directly), sets up an isolated dev environment for parallel development, captures a test baseline, and starts the worktree's implementation plan in docs/plan/.
+description: Worktree for any new feature or significant change - "start a feature", "new feature". Creates a git worktree off main (never commit to main directly), sets up an isolated dev environment, captures a test baseline, and starts the plan in docs/plan/.
 ---
 
 # Feature Worktrees
@@ -36,6 +36,9 @@ discard uncommitted work at teardown).
   fails, append `.claude/worktrees/` to `.git/info/exclude` (local-only, so
   no commit to main is needed). Never rely on a machine's global gitignore —
   on another clone the worktrees would pollute `git status` and test runs.
+
+**Done when:** `git worktree list` shows `.claude/worktrees/<name>` on its
+branch and `git check-ignore -q .claude/worktrees` succeeds.
 
 ## 2. Set up an isolated environment
 
@@ -112,6 +115,9 @@ progress and its `claude --continue` resume command — including for
 `EnterWorktree`-started sessions, which it re-homes to the worktree's own
 directory.
 
+**Done when:** `se env` reports every entry present or done and the parallel
+one-liner has been handed over.
+
 ## 3. Capture the baseline
 
 Immediately after setup, **before any code changes**:
@@ -126,6 +132,9 @@ Immediately after setup, **before any code changes**:
 - From now on, "done" means: the suite re-run shows **no new failures
   versus this baseline**, and the feature's own tests pass.
 
+**Done when:** `scratchpad/baseline.md` exists with a PASS/FAIL line per
+command.
+
 ## 4. Start the plan
 
 Create `docs/plan/<branch-name>.md` using the plan skill, replacing every
@@ -135,6 +144,9 @@ worktree branches carry a `+`). One plan file per worktree — that is all
 `## TODO` checklist; **implementation starts only after the checklist
 exists and the user has approved the plan** — the checklist existing is not
 the approval. Items get checked off as steps complete.
+
+**Done when:** `docs/plan/<branch>.md` exists, ends with a `## TODO`, and
+the user has approved it.
 
 ## 5. Finish and tear down safely
 
@@ -167,3 +179,6 @@ Anything precious and gitignored (a local secret, a local `*.db` snapshot)
 belongs in `worktree.json`'s `copy` list, not just in a comment or your
 memory — that's what makes `se teardown`'s refusal mechanical instead of
 hoping someone remembers to check first.
+
+**Done when:** `git worktree list` no longer shows it and `git branch` no
+longer shows the branch.

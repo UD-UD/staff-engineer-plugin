@@ -1,6 +1,6 @@
 ---
 name: pr
-description: Use when preparing or opening a pull request, or asked to "open a PR" or when the branch is "ready for review". Runs a self-review of the full branch diff first, then produces a PR with a why-focused description, verification steps, risk callouts, and reviewer guidance.
+description: Pull request - "open a PR", the branch is "ready for review", or any PR preparation. Self-reviews the full branch diff first, then writes a why-focused description with verification steps, risk callouts, and reviewer guidance.
 ---
 
 # Pull Request Preparation
@@ -17,6 +17,8 @@ Review the **full branch diff against the base branch**
 `review` skill / staff-reviewer agent for this. Fix blockers before opening
 the PR. A PR opened with known defects wastes the reviewer's pass.
 
+**Done when:** the reviewer's report is in hand and every Blocker is fixed.
+
 ### 2. Sanity-check the branch
 
 - All tests pass locally; state which suite you ran.
@@ -24,6 +26,9 @@ the PR. A PR opened with known defects wastes the reviewer's pass.
   in the diff.
 - Commits tell a readable story; squash pure fixup noise if the project's
   workflow allows it.
+
+**Done when:** tests pass, the diff is clean, and the commit history reads
+well.
 
 ### 3. Write the description
 
@@ -52,12 +57,17 @@ Include screenshots or before/after output for anything user-visible.
 footers, no session links, no co-author credits — even when tool defaults
 append them. The PR is authored by the user alone.
 
+**Done when:** the body has What, Why, How to verify, and Risk, with no AI
+attribution.
+
 ### 4. Guide the reviewer
 
 Name the one or two files where the real decision lives and what kind of
 scrutiny you want ("the retry logic in `sync.ts` is the risky part"). If a
 change is large but mechanical, say which parts are mechanical so the
 reviewer can skim them.
+
+**Done when:** the reviewer knows where to look first and what to skim.
 
 ### 5. Open it
 
@@ -66,3 +76,5 @@ body, and **wait for the user's go-ahead** before creating it. Then use the
 `gh` CLI when available. Target the project's default base branch unless told
 otherwise. Open as a draft when the work is explicitly work-in-progress;
 otherwise ready-for-review.
+
+**Done when:** the user has said go and `gh pr view` shows the PR.
