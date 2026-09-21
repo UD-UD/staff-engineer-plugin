@@ -19,7 +19,8 @@ Adopts the items marked "adopt" in the mattpocock/skills review (see
   hypotheses, instrument one variable at a time, fix with a regression
   test, then clean up.
 - Git-guard Rule 6: refuse a commit while a `[DEBUG-xxxx]` tag survives
-  anywhere in the tree.
+  anywhere in the tree - hex in either case, scanned from the repo root, so
+  the rule holds whichever directory the commit is typed in.
 - `tests/test-manifest.sh`: asserts `plugin.json` and `hooks.json` parse,
   every skill and agent frontmatter is complete, every hook path resolves,
   and no debug-tag literal survives — with a negative fixture proving the
@@ -32,9 +33,12 @@ Adopts the items marked "adopt" in the mattpocock/skills review (see
   severity ranking.
 - Three named test anti-patterns (tautological, side-channel verification,
   horizontal slicing) in `/se:test`, and the pre-agreed-seam rule.
-- `hooks/scripts/scratchpad-guard.sh`: refuses a Write, Edit, or Bash
-  command aimed at the harness temp scratchpad; creates the project's own
-  `scratchpad/` and ignores it via `info/exclude` if nothing does yet.
+- `hooks/scripts/scratchpad-guard.sh`: refuses a Write or Edit aimed at the
+  harness temp scratchpad, and a Bash command that writes there (a
+  redirection, or `mkdir`/`cp`/`mv`/`tee`/`touch`/`rsync`/`install`/`ln`/`dd`);
+  reading or removing that directory is left alone. Creates the project's own
+  `scratchpad/` and ignores it via `info/exclude` if nothing does yet,
+  appending the entry at most once.
 
 ### Changed
 

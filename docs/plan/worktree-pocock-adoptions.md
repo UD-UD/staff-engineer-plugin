@@ -228,3 +228,29 @@ Wave 2 (parallel, disjoint files):
 Wave 3 (orchestrator):
 - [x] 12. descriptions audit                  → verify: triggers kept, ≤45 words each (all 11 ≤45; only review and test needed trimming; setup and retro left as-is by the user's call, since both are user-invoked and their descriptions never reach the model)
 - [x] 13. README, CHANGELOG, version, decisions → verify: validate passes, counts match, suite green (`claude plugin validate .` passed with marketplace.json moved aside; `ls skills | wc -l` = 11 matches the README badge; suite 252 pass / 0 fail; 0.1.0 changelog lines checked against the 13 real merge commits)
+
+## TODO — self-review fixes (2026-09-21)
+
+Found by `/se:pr`'s self-review of the full branch diff, before the PR was
+opened. Each defect was reproduced first, then fixed.
+
+- [x] 15. Rule 6 accepts uppercase hex and scopes to the repo root
+      → verify: red-then-green in test-git-guard.sh for an uppercase-hex tag
+      and for a root tag committed from a subdirectory (uppercase hex + `-- :/`; 2 new assertions red then green)
+- [x] 16. manifest check 7 + git-guard self-check use the same pattern
+      → verify: both spell the class case-insensitively; suite green (manifest check 7 and the git-guard self-check both case-insensitive)
+- [x] 17. exclude-path assertion inspects repo2, not the test process cwd
+      → verify: assertion fails when repo2 really gains the entry (anchored to repo2; a positive mirror assertion added so the pair can fail)
+- [x] 18. scratchpad guard lets Bash reads and cleanup through
+      → verify: `cat`/`ls`/`rm -rf` exit 0; `>`, `mkdir`, `tee`, `cp` exit 2 (redirections and 9 file-creating commands block; cat/ls/grep/rm pass)
+- [x] 19. scratchpad guard appends `scratchpad/` to info/exclude at most once
+      → verify: three blocks in a tracking repo leave one line (grep before append; 3 blocks in a tracking repo leave 1 line)
+- [x] 20. debug phase-6 gate greps the guard's real pattern
+      → verify: the documented command returns nothing in this repo (documented gate returns 0 hits in this repo, was 26)
+- [x] 21. retro's standards clause no longer contradicts step 7
+      → verify: no claim that the builder holds no standards (scoped to new prose standards; builder keeps rules it applies inline)
+- [x] 22. tests/test-manifest.sh is executable like its siblings
+      → verify: mode 100755 in git (100755, and it was silently unrunnable before)
+- [x] 23. CHANGELOG and PR body match the shipped guard behaviour
+      → verify: no "anywhere in the tree" claim that the guard doesn't keep
+ (CHANGELOG + scratchpad/pr-body.md; suite 252 -> 267)
