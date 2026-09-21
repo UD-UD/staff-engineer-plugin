@@ -274,9 +274,9 @@ PY
 check_no_debug_tag() { # ROOT
   local check_root="$1"
   local debug_pattern
-  debug_pattern=$(printf '\\[DEBUG-%s\\]' '[0-9a-f]{4}')
+  debug_pattern=$(printf '\\[DEBUG-%s\\]' '[0-9a-fA-F]{4}')
   local hits
-  hits=$(git -C "$check_root" grep -lE --untracked -e "$debug_pattern" -- . 2>/dev/null)
+  hits=$(git -C "$check_root" grep -lE --untracked -e "$debug_pattern" -- :/ 2>/dev/null)
   if [ -z "$hits" ]; then
     ok "no debug-tag literal survives anywhere in the tree"
   else
