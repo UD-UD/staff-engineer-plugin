@@ -2,6 +2,65 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-09-21 — Adopt select ideas from the mattpocock/skills review, reject the rest
+
+**Decided.** Extend what already exists rather than restructure, and add
+three small skills for the ideas with no existing home. The interview
+technique lands as `grill` (model-invoked, called by `plan` and `setup`);
+the six-phase debugging loop lands as `debug`, backed by a new git-guard
+rule that refuses a commit while a `[DEBUG-xxxx]` tag survives in the
+tree; a user-invoked `retro` skill proposes deterministic outlets (a
+guard rule, an `se` verb, or a test) over prose. `plan` gains a `grill`
+call, a `docs/decisions.md`/glossary lookup, and expand → migrate →
+contract for wide refactors; `test` gains three named anti-patterns
+(tautological, side-channel verification, horizontal slicing); `review`
+and `staff-reviewer` gain a separate plan-conformance block; `setup` gains
+a `docs/architecture/glossary.md` template and becomes user-invoked;
+`worktree`, `commit`, `pr`, and `status` each gain a "Done when" line per
+step; `PRINCIPLES.md` prohibitions are paired with their positive target
+where one was missing. `tests/test-manifest.sh` checks the plugin
+manifest and frontmatter invariants mechanically instead of running
+`claude plugin validate` in CI.
+
+**Rejected — one large "method" skill holding grilling, debugging, and
+test rules.** Fewer files, but it would be always-loaded as one
+description and fire for the wrong moments; Pocock's own two-loads
+argument applies — split by the trigger word actually used.
+
+**Rejected — inlining the interview into `plan` only.** Cheaper, but
+`setup`'s adoption audit needs the same rounds, and a 25-line primitive is
+the right size to share.
+
+**Rejected — running `claude plugin validate` in CI.** Needs the CLI
+installed on the runner and the marketplace manifest moved aside (a known
+quirk). A bash manifest test in the existing suite checks the same
+invariants with no new dependency, and can assert it fails on a broken
+fixture.
+
+**Rejected — a `se debug` verb listing tags.** The guard's refusal message
+already names the files; nothing to add.
+
+**Rejected — rewriting `PRINCIPLES.md` wholesale for positive phrasing.**
+The file is load-bearing and injected every session; pair each
+prohibition with its positive target where one is missing, leave the
+rest.
+
+**Rejected — out of scope for this branch.** An issue-tracker
+abstraction, spec/ticket skills, or a wayfinder skill; any change to the
+`se` CLI verbs, `safe_to_teardown`, or an existing guard rule; a
+same-session review step or an auto-commit anywhere; a Fowler smell list
+in the reviewer; any CI change beyond what the new test file adds through
+the existing glob; a rewrite of `PRINCIPLES.md`'s structure or numbering;
+a glossary written for this repo (the template lives in `setup`; this
+repo gets one only if a later change needs it).
+
+All three gates hold: hard to reverse (a new skill surface and guard rule
+ship to every consumer of the plugin), surprising without context (a
+merged "method" skill or a CI-based `validate` check looks simpler until
+you hit always-loaded cost and runner dependencies), and a real trade-off
+(fewer files vs. firing on the wrong trigger; CI enforcement vs. a
+portable bash test).
+
 ## 2026-09-20 — The board flags a merged branch whose plan has unticked items
 
 **Decided.** `se status` adds a red anomaly line, "MERGED with N unticked

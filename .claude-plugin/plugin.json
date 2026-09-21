@@ -2,7 +2,7 @@
   "name": "se",
   "displayName": "Staff Engineer",
   "description": "Tunes Claude Code to work like a staff engineer: plan before coding, rigorous pre-commit review, testing discipline, and clean git/PR workflow. Skills under the /se: prefix.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Ujjal Dutta",
     "email": "duttaujjal143@gmail.com"

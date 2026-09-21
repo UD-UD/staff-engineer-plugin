@@ -226,5 +226,5 @@ Wave 2 (parallel, disjoint files):
 - [x] 10. worktree/commit/pr/status skills    → verify: done-when lines, tags, boundary bullet
 - [x] 11. explainer + PRINCIPLES              → verify: glossary read, §6 rule, <120 words added (+85)
 Wave 3 (orchestrator):
-- [ ] 12. descriptions audit                  → verify: triggers kept, ≤45 words each
-- [ ] 13. README, CHANGELOG, version, decisions → verify: validate passes, counts match, suite green
+- [x] 12. descriptions audit                  → verify: triggers kept, ≤45 words each (all 11 ≤45; only review and test needed trimming; setup and retro left as-is by the user's call, since both are user-invoked and their descriptions never reach the model)
+- [x] 13. README, CHANGELOG, version, decisions → verify: validate passes, counts match, suite green (`claude plugin validate .` passed with marketplace.json moved aside; `ls skills | wc -l` = 11 matches the README badge; suite 252 pass / 0 fail; 0.1.0 changelog lines checked against the 13 real merge commits)

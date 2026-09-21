@@ -4,9 +4,9 @@
 
 <br><br>
 
-![version](https://img.shields.io/badge/version-0.1.0-1D6FA5)
+![version](https://img.shields.io/badge/version-0.2.0-1D6FA5)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-1C2733)
-![skills](https://img.shields.io/badge/skills-8-8CC8F0)
+![skills](https://img.shields.io/badge/skills-11-8CC8F0)
 ![agents](https://img.shields.io/badge/agents-3-A78BD4)
 ![zero LLM CLI](https://img.shields.io/badge/se%20CLI-zero%20LLM-2C7A52)
 [![tests](https://img.shields.io/github/actions/workflow/status/UD-UD/staff-engineer-plugin/test.yml?branch=main&label=tests)](https://github.com/UD-UD/staff-engineer-plugin/actions/workflows/test.yml)
@@ -201,13 +201,39 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 |---|---|
 | `/se:setup` | Scaffold the standard layout + thin `CLAUDE.md` shim; adopts existing repos via a cleanup pass (worktree triage, CLAUDE.md migration, plan backfill, main baseline) |
 | `/se:worktree` | Start a feature: worktree, isolated env, baseline, plan; safe teardown after merge |
+| `/se:grill` | Interview the user in numbered rounds, each question with a recommended answer, until nothing about the design is left silently assumed; called by `plan` and `setup` |
 | `/se:plan` | Staff-engineer plan → `docs/plan/<branch>.md` with wave-grouped TODO |
-| `/se:review` | Verified-findings-only review of the working diff (delegates to staff-reviewer) |
-| `/se:test` | Testing discipline: regression-test-first, right level, never weaken a test |
-| `/se:commit` | Atomic conventional commits; secret/debug scan; no attribution, no bypasses |
+| `/se:review` | Verified-findings-only review of the working diff plus a plan-conformance check (delegates to staff-reviewer) |
+| `/se:test` | Testing discipline: regression-test-first, right level, never weaken a test, three named anti-patterns to avoid |
+| `/se:debug` | Six-phase debugging loop: deterministic red command first, minimise, 3–5 falsifiable hypotheses, one variable at a time, regression test, cleanup |
+| `/se:commit` | Atomic conventional commits; secret/debug-tag scan; no attribution, no bypasses |
 | `/se:pr` | Self-reviewed PR with why-focused description and risk callouts |
 | `/se:status` | Runs `se` and helps act on its anomalies |
+| `/se:retro` | User-invoked look-back at the session/branch; classifies each finding as mechanical (a guard rule, `se` verb, or test) or judgement (a principle or skill edit) |
 | `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal); `se debt` ledgers `se-debt:` markers — all zero LLM tokens |
+
+## You know it is working when
+
+- **`/se:setup`** — `docs/decisions.md`, `docs/plan/`, and a thin `CLAUDE.md`
+  shim exist in the repo root.
+- **`/se:worktree`** — `.claude/worktrees/<name>` exists and
+  `docs/architecture/worktree.json` has a fresh baseline entry.
+- **`/se:grill`** — the round ends with the frontier empty: a shared
+  understanding restated back, not a fresh open question.
+- **`/se:plan`** — `docs/plan/<branch>.md` exists, ending in a
+  wave-grouped TODO checklist.
+- **`/se:review`** — findings come back as `file:line` — defect — scenario
+  — fix, ranked blocker / should-fix / consider.
+- **`/se:test`** — a regression test is red before the fix and green after.
+- **`/se:debug`** — a `[DEBUG-xxxx]` tag appears in logs while diagnosing,
+  and `git grep -n 'DEBUG-'` returns nothing by the time you commit.
+- **`/se:commit`** — `git log -1` shows a conventional commit with no
+  `Co-Authored-By` trailer.
+- **`/se:pr`** — the PR description opens with why, not a restated diff.
+- **`/se:status`** — the board prints every worktree with its TODO progress
+  and a copy-paste resume command.
+- **`/se:retro`** — every mechanical finding in the output names a guard
+  rule, `se` verb, or test — never a paragraph.
 
 ## The layout it gives your projects
 
@@ -219,6 +245,7 @@ your-project/
 ├── docs/
 │   ├── architecture/      # complete overview: data flow, control flow,
 │   │                      # dev-environment.md, worktree.json (copy/symlink/postCreate/preDelete/baseline)
+│   │   └── glossary.md    # project vocabulary: term, meaning, Avoid: synonyms (created lazily)
 │   ├── decisions.md       # decision log, newest first
 │   └── plan/              # one implementation plan per worktree
 └── src/ …
@@ -232,10 +259,10 @@ staff-engineer-plugin/
 ├── PRINCIPLES.md            # always-on principles (SessionStart hook cats this)
 ├── PRINCIPLES-SUBAGENT.md   # digest injected into every delegated agent
 ├── bin/se                   # workflow CLI: status · env · baseline · teardown · debt
-├── skills/                  # setup · worktree · status · plan · review · test · commit · pr
+├── skills/                  # setup · worktree · grill · plan · review · test · debug · commit · pr · status · retro
 ├── agents/                  # builder (sonnet) · staff-reviewer · explainer (sonnet)
-├── hooks/                   # SessionStart + SubagentStart injections, PreToolUse → git-guard.sh
-├── tests/                   # 48-assertion suite for the guards and every se verb
+├── hooks/                   # SessionStart + SubagentStart injections, PreToolUse → git-guard.sh · scratchpad-guard.sh
+├── tests/                   # 252-assertion suite for the guards, the manifest, and every se verb
 ├── .github/workflows/       # the same suite on every push and PR (macOS, bash 3.2)
 └── assets/                  # README art
 ```
