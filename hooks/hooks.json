@@ -33,6 +33,15 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/git-guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/scratchpad-guard.sh"
+          }
+        ]
       }
     ]
   }
