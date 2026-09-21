@@ -1,6 +1,6 @@
 ---
 name: test
-description: Test discipline whenever behavior changes, a bug is fixed, or tests fail - "write tests", "why is this test failing". Every behavior change ships with a test, bug fixes start with a failing regression test, the right level is chosen, and tests are never weakened to pass.
+description: Test discipline whenever behavior changes, a bug is fixed, or tests fail - "write tests", "why is this test failing". Every behavior change ships with a test at the right level, bugs start with a failing regression test, and tests are never weakened to pass.
 ---
 
 # Testing Discipline

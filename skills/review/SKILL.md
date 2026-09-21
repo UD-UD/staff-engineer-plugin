@@ -1,6 +1,6 @@
 ---
 name: review
-description: Review - "review this", "check my changes", "look at this diff", before committing, or before opening a PR. Staff-engineer review of the working diff or a named commit range - correctness, error handling, silent failures, security, naming, needless complexity - verified, ranked findings plus plan conformance.
+description: Review - "review this", "check my changes", "look at this diff", before committing, or before opening a PR. Staff-engineer review of the working diff or a commit range - correctness, error handling, silent failures, security, naming, needless complexity - verified, ranked findings plus plan conformance.
 ---
 
 # Staff-Engineer Code Review
