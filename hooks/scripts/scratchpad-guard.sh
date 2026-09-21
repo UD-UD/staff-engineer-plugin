@@ -7,7 +7,8 @@
 # creates. Anything aimed at the harness scratchpad is refused and redirected
 # there. Exit 2 blocks the tool call; stderr is fed back to Claude.
 #
-# Allowed on purpose: reads (Read is not matched), tool calls whose cwd is
+# Allowed on purpose: reads (Read is not matched, and a Bash command that
+# only reads or removes the directory passes too), tool calls whose cwd is
 # not inside a git repo (there is no project scratchpad to point at), and
 # every other harness path (task transcripts, uploads) - only the scratchpad
 # directory itself is redirected.
@@ -48,8 +49,26 @@ esac
 # encoded project dir, session id, then the literal "scratchpad", ended by
 # a slash, any non-path character (space, quote, ; & |), or end of string.
 seg='[A-Za-z0-9._-]+'
-pattern="(/private)?/tmp/claude-$seg/$seg/$seg/scratchpad([^A-Za-z0-9._-]|$)"
+sp_path="(/private)?/tmp/claude-$seg/$seg/$seg/scratchpad"
+pattern="$sp_path([^A-Za-z0-9._-]|$)"
 [[ "$target" =~ $pattern ]] || exit 0
+
+# Write and Edit always write. A Bash command only does when it redirects
+# into the path or hands it to a command that creates files; reading the
+# directory (cat, ls, grep) and removing it have no project-scratchpad
+# equivalent to redirect to, so they pass. A write buried inside an
+# interpreter ('python3 -c ...open(p, "w")') slips through - this guard
+# redirects the common spellings, it is not a fence around the directory.
+if [ "$tool" = "Bash" ]; then
+  # Both regexes live in variables: bash parses parentheses inside an
+  # unquoted [[ =~ ]] operand as shell grouping, not as regex.
+  redirect=">>?[[:space:]]*[\"']?$sp_path"
+  verbs='mkdir|cp|mv|tee|touch|rsync|install|ln|dd'
+  writes_here="(^|[;&|(])[[:space:]]*($verbs)([[:space:]]|\$)"
+  if ! [[ "$target" =~ $redirect ]] && ! [[ "$target" =~ $writes_here ]]; then
+    exit 0
+  fi
+fi
 
 root=$(git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null) || exit 0
 
@@ -69,7 +88,9 @@ if ! git -C "$root" check-ignore -q scratchpad 2>/dev/null; then
     /*) : ;;
     ?*) exclude="$root/$exclude" ;;
   esac
-  if [ -n "$exclude" ]; then
+  # A repo that tracks scratchpad/ never satisfies check-ignore, so without
+  # this the entry would be appended again on every block.
+  if [ -n "$exclude" ] && ! grep -qs '^scratchpad/$' "$exclude"; then
     { mkdir -p "$(dirname "$exclude")" && printf 'scratchpad/\n' >> "$exclude"; } 2>/dev/null
   fi
 fi

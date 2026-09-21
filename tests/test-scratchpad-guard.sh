@@ -96,12 +96,73 @@ assert_contains "first block says the scratchpad was created" "$err" "created it
 rc=$(guard_rc Write file_path "$harness/notes.md" "$repo2")
 assert_exit "block in a repo whose .gitignore already covers scratchpad" 2 "$rc"
 [ -d "$repo2/scratchpad" ] && ok "scratchpad created in repo2" || notok "scratchpad created in repo2"
-excl=$(git -C "$repo2" rev-parse --git-path info/exclude)
+# `rev-parse --git-path` prints a path relative to the repo, so it has to be
+# anchored to repo2 explicitly - resolving it against this process's cwd
+# would silently inspect the plugin's own exclude file instead.
+excl="$repo2/.git/info/exclude"
 if [ -f "$excl" ] && grep -q '^scratchpad/$' "$excl"; then
   notok "no exclude entry added when .gitignore already covers it"
 else
   ok "no exclude entry added when .gitignore already covers it"
 fi
+
+# The mirror of the assertion above: in a repo that ignores nothing, the
+# entry really is written. Without this pair, the check above passes for a
+# repo that was never touched at all.
+excl1="$repo/.git/info/exclude"
+if [ -f "$excl1" ] && grep -q '^scratchpad/$' "$excl1"; then
+  ok "exclude entry added in a repo that ignores nothing"
+else
+  notok "exclude entry added in a repo that ignores nothing"
+fi
+
+# A repo that *tracks* scratchpad/ never satisfies check-ignore, so an
+# unguarded append writes a fresh line on every single block.
+repo3="$tmpdir/repo3"
+mkdir -p "$repo3/scratchpad"
+git -C "$repo3" init -q -b main
+printf 'keep\n' > "$repo3/scratchpad/keep.txt"
+git -C "$repo3" add -A >/dev/null 2>&1
+git -C "$repo3" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+for _ in 1 2 3; do
+  rc=$(guard_rc Write file_path "$harness/notes.md" "$repo3")
+done
+assert_exit "block still refuses in a repo that tracks scratchpad/" 2 "$rc"
+excl3="$repo3/.git/info/exclude"
+count3=$(grep -c '^scratchpad/$' "$excl3" 2>/dev/null || echo 0)
+assert_exit "three blocks append the exclude entry at most once" 1 "$count3"
+
+# --- allowed: reading and cleaning up the harness scratchpad ----------------
+# The guard redirects writes; it is not a fence around the directory. Reads
+# and removal have no project-scratchpad equivalent to redirect to.
+rc=$(guard_rc Bash command "cat $harness/out.txt" "$repo")
+assert_exit "Bash read of the harness scratchpad allowed" 0 "$rc"
+
+rc=$(guard_rc Bash command "ls -la $harness" "$repo")
+assert_exit "Bash listing of the harness scratchpad allowed" 0 "$rc"
+
+rc=$(guard_rc Bash command "grep -rn needle $harness" "$repo")
+assert_exit "Bash grep of the harness scratchpad allowed" 0 "$rc"
+
+rc=$(guard_rc Bash command "rm -rf $harness" "$repo")
+assert_exit "Bash cleanup of the harness scratchpad allowed" 0 "$rc"
+
+# --- blocked: the write forms, however they are spelled ---------------------
+rc=$(guard_rc Bash command "echo hi > $harness/out.txt" "$repo")
+assert_exit "Bash redirect into the harness scratchpad blocked" 2 "$rc"
+
+rc=$(guard_rc Bash command "printf x >>$harness/out.txt" "$repo")
+assert_exit "Bash append-redirect into the harness scratchpad blocked" 2 "$rc"
+
+rc=$(guard_rc Bash command "cat a.txt | tee $harness/out.txt" "$repo")
+assert_exit "Bash tee into the harness scratchpad blocked" 2 "$rc"
+
+rc=$(guard_rc Bash command "touch $harness/flag" "$repo")
+assert_exit "Bash touch in the harness scratchpad blocked" 2 "$rc"
+
+# A Read tool call is never matched, whatever it names.
+rc=$(guard_rc Read file_path "$harness/out.txt" "$repo")
+assert_exit "Read of the harness scratchpad allowed" 0 "$rc"
 
 # --- allowed: the project's own scratchpad and everything else --------------
 rc=$(guard_rc Write file_path "$repo/scratchpad/notes.md" "$repo")
