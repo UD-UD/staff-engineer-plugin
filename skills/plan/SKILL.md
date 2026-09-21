@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Use before implementing any non-trivial feature, refactor, or bug fix, or when asked "how should we build", "plan this", "design this" - not for trivial one-file fixes. Produces a staff-engineer implementation plan - clarified requirements, explored codebase patterns, weighed approaches with trade-offs, explicit non-goals, and a verifiable step sequence.
+description: Plan before implementing any non-trivial feature, refactor, or bug fix - "how should we build", "plan this", "design this"; not for trivial one-file fixes. A staff-engineer plan - clarified requirements, explored codebase patterns, weighed approaches with trade-offs, explicit non-goals, and a verifiable step sequence.
 ---
 
 # Staff-Engineer Planning
@@ -24,8 +24,10 @@ until the plan is presented.
   mechanism is the right fix. **If a simpler approach exists, say so — push
   back when warranted.**
 - Identify who is affected and what "done" observably means.
-- If something is unclear, stop, name exactly what's confusing, and ask —
-  one round of focused questions, not a drip of them.
+- When anything is unclear, or a decision is the user's to make, call the
+  Skill tool with `"grill"` — the plugin's interview primitive: rounds over
+  the frontier of askable questions, each numbered with a recommended
+  answer; facts are looked up (Explore agent), decisions are asked.
 
 ### 2. Explore before proposing
 
@@ -38,6 +40,11 @@ Never design against an imagined codebase.
   contracts you must not silently break.
 - Note conventions (error handling style, validation location, layering) the
   new code must follow.
+- Read `docs/architecture/glossary.md` if it exists, and use its terms (and
+  avoid the synonyms it says to avoid) throughout the plan.
+- Before proposing an approach, grep `docs/decisions.md` for "Rejected"
+  entries that name the same idea. If one exists, say so in the plan and
+  either honour it or argue explicitly why it should be reopened.
 
 ### 3. Weigh approaches
 
@@ -66,7 +73,12 @@ explicit approval. Never deviate from SOLID silently.
   requested, no error handling for scenarios that can't occur.
 - Close the section with the simplicity test: *would a senior engineer say
   this plan is overcomplicated?* If yes, simplify before presenting it.
-- If the work is large, split it into independently shippable stages.
+- If the work is large, split it into independently shippable stages. A
+  **wide mechanical refactor** (a rename or retype whose blast radius touches
+  many call sites at once, so no single vertical slice can land green) is
+  sequenced as expand → migrate in batches → contract: add the new form
+  beside the old, migrate call sites in batches sized by blast radius (each
+  batch its own step), then delete the old form last.
 
 ### 5. Risks and unknowns
 
@@ -114,7 +126,10 @@ Once approved, in projects using the standard layout:
   implementation step. **Implementation does not start until this checklist
   exists.** Check items off as each step completes (with a one-line note when
   reality deviated from the plan) — the checklist is the live state of the
-  work, readable by any agent or human picking it up mid-way.
+  work, readable by any agent or human picking it up mid-way. Each item names
+  the behaviour and its verify condition — what the step makes true,
+  checkable — never file paths, which may be stale by the time a step is
+  dispatched.
 - Group the checklist into **waves**: steps in the same wave are independent
   (disjoint files, no ordering between them); waves run in order.
 
@@ -130,13 +145,19 @@ Once approved, in projects using the standard layout:
 - **Execute with parallel builders**: dispatch every step of the current
   wave to its own `builder` agent (bundled, Sonnet) in a single message —
   each given the step text, its verify condition, and its file scope. The
-  main session stays the orchestrator: it verifies each builder's result,
-  ticks the checkbox, reports what landed, and **waits for the user's
-  go-ahead before launching the next wave**. Steps whose file scopes
-  overlap never run in the same wave; a step too entangled to delegate is
-  done by the orchestrator itself.
+  orchestrator computes each builder's "may touch" file list at dispatch time
+  from the current tree — not from the plan text — and passes it in the
+  dispatch prompt. The main session stays the orchestrator: it verifies each
+  builder's result, ticks the checkbox, reports what landed, and **waits for
+  the user's go-ahead before launching the next wave**. Steps whose file
+  scopes overlap never run in the same wave; a step too entangled to
+  delegate is done by the orchestrator itself.
 - Append the key decisions (chosen approach, rejected alternatives, why) to
   `docs/decisions.md`, newest first. Decisions get recorded when they're
-  made, not at project end.
+  made, not at project end. Write an entry only when it passes three gates:
+  the decision is hard to reverse, it would surprise a future reader without
+  the context, and it is the result of a real trade-off. A decision that
+  fails any gate stays in the plan file rather than going to
+  `docs/decisions.md`.
 - Consult `docs/architecture/` during step 2 (explore) before re-deriving
   the project picture from source.
