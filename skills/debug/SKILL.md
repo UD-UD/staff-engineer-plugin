@@ -101,7 +101,9 @@ Before calling the bug closed, confirm all of:
 
 - The original feedback loop from phase 1 is green.
 - The regression test is green (or the missing seam is documented).
-- `git grep -n 'DEBUG-'` returns nothing.
+- `git grep -nE '\[DEBUG-[0-9a-fA-F]{4}\]'` returns nothing. (A bare
+  `DEBUG-` search also hits every file that documents the convention, this
+  one included.)
 - Any throwaway harness from phase 1 is removed.
 - The commit message states the confirmed hypothesis, not just "fix bug".
 

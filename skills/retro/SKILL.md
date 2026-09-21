@@ -61,4 +61,5 @@ the terminal too.
 This skill proposes; it never edits files. Acting on a candidate is a new
 plan and a new worktree, built on this list. The implementation agent that
 would do that work carries the most context pressure of the two stages, so
-standards belong in the reviewer, not the builder.
+a new prose standard goes to the reviewer by default; the builder carries
+only a rule it has to apply while the code is being written.

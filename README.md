@@ -226,7 +226,8 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
   — fix, ranked blocker / should-fix / consider.
 - **`/se:test`** — a regression test is red before the fix and green after.
 - **`/se:debug`** — a `[DEBUG-xxxx]` tag appears in logs while diagnosing,
-  and `git grep -n 'DEBUG-'` returns nothing by the time you commit.
+  and `git grep -nE '\[DEBUG-[0-9a-fA-F]{4}\]'` returns nothing by the time
+  you commit.
 - **`/se:commit`** — `git log -1` shows a conventional commit with no
   `Co-Authored-By` trailer.
 - **`/se:pr`** — the PR description opens with why, not a restated diff.
