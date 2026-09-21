@@ -1,6 +1,6 @@
 ---
 name: review
-description: Use before committing, before opening a PR, or when asked to "review this", "check my changes", or "look at this diff". Runs a staff-engineer review of the working diff (or a named commit range) - correctness, error handling, silent failures, security, naming, and needless complexity - reports verified, ranked findings.
+description: Review - "review this", "check my changes", "look at this diff", before committing, or before opening a PR. Staff-engineer review of the working diff or a named commit range - correctness, error handling, silent failures, security, naming, needless complexity - verified, ranked findings plus plan conformance.
 ---
 
 # Staff-Engineer Code Review
@@ -90,8 +90,24 @@ review should still tell the user where you looked.
 
 Report first; apply fixes only when the user asks.
 
+## Plan conformance
+
+Separately from severity-ranked findings, check the diff against the plan
+for the branch under review: locate `docs/plan/<branch>.md` (branch with
+`/` replaced by `-`, falling back to the fully flattened form — every
+character outside `[A-Za-z0-9._-]` replaced by `-`), or the plan path the
+caller named directly. If found, report which TODO items are unfinished,
+which diff changes no TODO item asked for (checked against the plan's
+Non-goals), and which ticked items don't actually do what the step says. If
+no plan file exists, say so in one line — "No plan file for <branch>;
+conformance not checked." — rather than inventing requirements from the
+code. This never gets merged into or ranked against Blocker / Should fix /
+Consider; see `agents/staff-reviewer.md` for the full procedure and report
+shape.
+
 When the report has substance (any blocker or should-fix), also delegate to
 the `explainer` agent to publish it as a plain-English artifact page — each
 finding stated in simple words with its real-world consequence — and share
-the link. The terminal keeps the compact `file:line` version; the artifact is
+the link. Include the Plan conformance block in the hand-off when it has
+content. The terminal keeps the compact `file:line` version; the artifact is
 the one a human reads end to end.
