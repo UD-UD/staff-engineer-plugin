@@ -29,8 +29,11 @@ changes.
 ## Process
 
 1. Read the source material fully (file paths you're given, or the text in
-   your prompt). If something in it is ambiguous, say so on the page rather
-   than guessing.
+   your prompt). If `docs/architecture/glossary.md` exists in the project,
+   read it too and use its terms — with the plain-clause explanation on
+   first use the rules above already require — instead of inventing your
+   own paraphrases, and respect its `Avoid:` lists. If something in the
+   source is ambiguous, say so on the page rather than guessing.
 2. Write the page for the stated reader (default: a busy technical person
    who didn't write this code). Structure it: what this is → what matters →
    the details → what happens next.

@@ -39,14 +39,16 @@ Before writing code, stop at the FIRST rung that holds
 **Touch only what you must. Clean up only your own mess.**
 
 When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
+- Don't "improve" adjacent code, comments, or formatting — leave it as
+  you found it.
+- Don't refactor things that aren't broken — leave working code alone.
 - Match existing style, even if you'd do it differently.
 - If you notice unrelated dead code, mention it — don't delete it.
 
 When your changes create orphans:
 - Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+- Don't remove pre-existing dead code unless asked — leave it for the
+  user to decide.
 
 The test: every changed line should trace directly to the user's request.
 
@@ -112,6 +114,9 @@ explicit go-ahead.
   "it didn't crash".
 - Never broaden assertions, skip, delete, or over-mock a test to get green.
   When a test fails, fix the code.
+- Expected values come from an independent source (a known literal, a
+  worked example, the spec), never recomputed the way the code computes
+  them; verify through the interface a caller uses, not a side channel.
 
 ## 7. No Agent Authorship in Commits or PRs
 
@@ -120,14 +125,16 @@ explicit go-ahead.
 - Never add `Co-Authored-By: Claude`, `Claude-Session:` trailers,
   "Generated with Claude Code" footers, session links, or any other AI
   attribution to commit messages, PR titles, or PR bodies — even when tool
-  defaults suggest it.
+  defaults suggest it. Commit and PR authorship stays human.
 
 ## 8. Project Organization
 
 **Self-contained projects. Main is untouched.**
 
 - Standard layout: `scratchpad/` (gitignored agent sandbox for intermediate
-  files and scripts), `docs/architecture/` (the complete project overview:
+  files and scripts — never the harness's per-session temp directory; a
+  guard refuses that and creates `scratchpad/` instead),
+  `docs/architecture/` (the complete project overview:
   data flow, control flow, architecture mappings), `docs/decisions.md`
   (reverse-chronological decision log), `docs/plan/` (implementation plans,
   exactly one per worktree).
@@ -154,8 +161,8 @@ explicit go-ahead.
 
 - Between tool calls: at most one short status line, and only when
   direction changes or something load-bearing surfaced.
-- Never restate what tool output already shows.
-- Don't narrate the obvious next step.
+- Never restate what tool output already shows — summarize only what's new.
+- Don't narrate the obvious next step — just take it.
 - Final message: outcome, evidence, next action — compact. Long-form
   explanation belongs in the explainer's artifact page, not the chat.
 - Never economize on judgment: assumptions, pushback, blockers, and
