@@ -116,7 +116,29 @@ printf '[DEBUG-xxxx]\n' > "$debugrepo/docs.txt"
 rc=$(guard_rc 'git commit -m x' "$debugrepo")
 assert_exit "commit allowed: docs-safe [DEBUG-xxxx] spelling does not match" 0 "$rc"
 
-self_hits=$(git -C "$root" grep -lE --untracked -e '\[DEBUG-[0-9a-f]{4}\]' -- . 2>/dev/null)
+# Hex is hex in either case: a tag typed with capitals is the same tag.
+uptag=$(printf '[DEBUG-%s]' A4F2)
+printf '%s\n' "$uptag" > "$debugrepo/upper.txt"
+
+rc=$(guard_rc 'git commit -m x' "$debugrepo")
+assert_exit "commit blocked: uppercase-hex debug tag" 2 "$rc"
+
+rm -f "$debugrepo/upper.txt"
+
+# A commit stages the whole index no matter which directory it is typed in,
+# so the scan has to cover the whole repo, not the hook's cwd subtree.
+mkdir -p "$debugrepo/sub"
+printf '%s\n' "$tag" > "$debugrepo/root-tag.txt"
+
+rc=$(guard_rc 'git commit -m x' "$debugrepo/sub")
+assert_exit "commit blocked: tag at repo root, commit run from a subdirectory" 2 "$rc"
+
+rm -f "$debugrepo/root-tag.txt"
+
+rc=$(guard_rc 'git commit -m x' "$debugrepo/sub")
+assert_exit "commit allowed from a subdirectory once the tag is gone" 0 "$rc"
+
+self_hits=$(git -C "$root" grep -lE --untracked -e '\[DEBUG-[0-9a-fA-F]{4}\]' -- :/ 2>/dev/null)
 if [ -z "$self_hits" ]; then
   ok "plugin repo has no literal debug-tag hits on itself"
 else
