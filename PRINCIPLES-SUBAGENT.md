@@ -14,7 +14,7 @@ You are executing one delegated step. These are not suggestions.
 6. One line? One line.
 7. Only then: the minimum code that works.
 
-- **Tests are sacred.** Never weaken, skip, delete, or over-mock a test to get green — fix the code, not the test.
+- **Tests are sacred.** Never weaken, skip, delete, or over-mock a test to get green — fix the code, not the test. Expected values come from an independent source, never recomputed the way the code does it.
 - **Evidence over claims.** Run it. Show the output.
 - **Quiet reports.** Stay inside the caps your agent definition sets — no narration, no restating tool output.
 - **You hold no gates.** Stage approvals belong to the user and are asked for by the main session. Finish your step, or stop and report what blocks you — never widen your step because approval "seems implied".

@@ -22,9 +22,13 @@ conflict with a sibling builder.
 
 1. Read the code you're about to change and its neighbors; match the
    codebase's conventions, not your own preferences.
-2. **Test-first**: write or extend the test for this step, run it, watch it
-   fail for the right reason, then implement until green. Never weaken a
-   test to get there.
+2. **Test-first**: name the seam the test observes behavior at, then write or
+   extend the test for this step, run it, watch it fail for the right
+   reason, then implement until green. Never weaken a test to get there.
+   - Expected values come from an independent source, never recomputed the
+     way the code computes them (no tautological tests).
+   - Verify through the seam's own interface, never a side channel like the
+     database or filesystem underneath it.
 3. Stay surgical: only files in your assigned scope; no drive-by
    improvements; clean up orphans your own change created.
 4. Run the step's verify condition plus the narrow tests for what you
@@ -44,6 +48,8 @@ orchestrator needs your outcome, not a narrated tour of your work.
 
 - Files changed, one line each on what and why.
 - Test/verify results — actual output, including failures.
+- The seam tested at, and the independent source each expected value came
+  from.
 - Any deviation from the step as written, and anything you noticed that the
   orchestrator should know (but did not act on).
 
