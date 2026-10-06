@@ -118,15 +118,19 @@ Only when `se codex` prints `codex: ready (...)` and exits 0. Otherwise say
 nothing about Codex.
 
 Once the first review is done — delegated to staff-reviewer or done inline —
-present that report as above, then offer in one line, naming what leaves the
-machine: "Also get a Codex second opinion? (the diff goes to Codex/OpenAI)".
-Never automatic; declining is the off switch.
+present that report as above but mark its verdict line *provisional*, then
+offer in one line, naming what leaves the machine: "Also get a Codex second
+opinion? (Codex/OpenAI gets the diff and can read any file in this repo,
+including gitignored ones like `.env`)". Never automatic; declining is the
+off switch, and the verdict then stands as given.
 
 Codex can review only two scopes: uncommitted work (`codex review
 --uncommitted`) and the current branch against its base (`codex review --base
-<base>`). For a commit range, another branch, or a PR, make no offer — say in
-one line that Codex can only review uncommitted work or the current branch
-against its base.
+<base>`) — the latter only when `git status --porcelain` is empty, because
+with a dirty tree `codex review --base` also reads the uncommitted edits and
+reviews a different diff from `git diff <base>...HEAD`. For a commit range,
+another branch, a PR, or a branch review on a dirty tree, make no offer —
+say in one line which of those it is and why.
 
 Run contract:
 
@@ -137,12 +141,17 @@ Run contract:
    run wrote it.
 4. Any failure is reported as `Codex failed: <reason>` — never as "no
    findings".
+5. Codex reads the live tree, so make no edits to it — fixes for the first
+   report included — until the run is collected; otherwise its findings cite
+   lines that no longer exist.
 
 Codex findings arrive as an addendum to the first report, not a rewrite of it.
 Each one must pass "Verification before reporting" like any other finding and
 is tagged `[codex]`. A finding that duplicates one already reported is noted
 "both models found it" instead of repeated. If nothing survives, say "Codex:
 no findings survived verification." Re-publish the explainer page with the
-addendum included.
+addendum included, or publish one now if the first report had none and the
+addendum has a finding.
 
-If the user accepted the second opinion, the one-line verdict waits for it.
+If the user accepted the second opinion, end with the final one-line verdict
+after the addendum, restating or overturning the provisional one.

@@ -106,9 +106,11 @@ this plan for sins before you approve?" On yes, call the Skill tool with
 which is presented again. Skipping it is a normal answer, not a warning.
 
 When `se codex` prints `codex: ready`, make it one combined offer instead:
-"Check this plan for sins? (+ Codex second opinion — the plan text goes to
-Codex/OpenAI)". The user may take either, both, or neither; when Codex is
-not ready, say nothing about it. For the Codex half:
+"Check this plan for sins? (+ Codex second opinion — Codex/OpenAI gets the
+plan and can read any file in this repo, including gitignored ones like
+`.env`)". The user may take either, both, or neither; when Codex is not
+ready, say nothing about it. Start the Codex half first, in the background,
+so it runs while check-sins does. For the Codex half:
 
 - Write the plan once to `scratchpad/codex-plan-input.md` — Codex reads that
   snapshot, never a file still being edited — and remove any old
@@ -119,9 +121,11 @@ not ready, say nothing about it. For the Codex half:
   session's reasoning or the check-sins findings.
 - Check the exit status and read the result only if this run wrote it; a
   failure is reported as `Codex failed: <reason>`, never as "no findings".
-- Show Codex's points beside the check-sins report, marking where both
-  found the same thing. They go through the same act / accept / reject
-  round as the sins.
+- When both were taken, pass the result path to check-sins as its Codex
+  input: it presents Codex's points beside the sins and puts them in the
+  same act / accept / reject round. When only Codex was taken, present its
+  points and run that round yourself, recording each decision exactly as
+  check-sins step 4 says for plan mode.
 
 **Then stop.** Reviewing the plan together is the cheapest place to catch a
 wrong assumption; after implementation starts, the same correction costs a

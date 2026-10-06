@@ -46,9 +46,16 @@ could not run.
 
 ### 3. Present
 
+If the caller passed a Codex result path (the `plan` skill does, when the
+user also took a Codex second opinion), wait for that run to be collected
+and add its points after the sins, tagged `[codex]`, marking any that match
+a sin as "both found it". A failed run is shown as `Codex failed: <reason>`.
+The inquisitor never sees them; they are joined only here.
+
 Hand the report to the `explainer` agent to publish as a plain-English page.
 Give the user the link plus a terminal summary: the verdict line and one line
-per sin.
+per sin (and per `[codex]` point). In step 4, `[codex]` points get the same
+three choices as sins.
 
 **Done when:** the user has the link and the summary.
 

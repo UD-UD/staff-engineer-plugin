@@ -84,15 +84,18 @@ would trip the guard on this repo. -->
 A result that kills the hypothesis moves you to the next one on the list.
 When every listed hypothesis is dead, go back to step 3 for a new ranked
 list. First, if `se codex` (the plugin CLI) prints `codex: ready (...)` and
-exits 0, offer a Codex diagnosis: "Get a Codex diagnosis? This sends the red
-command, the minimised repro, and the ruled-out hypotheses with their
-evidence to Codex (OpenAI), redacted." If it isn't ready, say nothing about
-Codex.
+exits 0, offer a Codex diagnosis: "Get a Codex diagnosis? Codex (OpenAI) gets
+a redacted note of the red command, the minimised repro, and the ruled-out
+hypotheses — and, while diagnosing, can read any file in this repo,
+including gitignored ones like `.env`." The read-only sandbox stops writes,
+not reads, so never call the hand-off redacted without that second half. If
+the repo holds secrets in files, say so in the offer. If it isn't ready, say
+nothing about Codex.
 
 If the user accepts:
 
-- Everything sent passes the Redact rule first: no tokens, credentials, or
-  customer data. Codex gets no current theory, only what was ruled out.
+- The note passes the Redact rule first: no tokens, credentials, or customer
+  data. Codex gets no current theory, only what was ruled out.
 - Write the redacted input once to `scratchpad/codex-debug-input.md` and
   remove any old `scratchpad/codex-debug.md`. Then run
   `codex exec -s read-only -o scratchpad/codex-debug.md "<instruction to
