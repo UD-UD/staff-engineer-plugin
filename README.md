@@ -211,7 +211,14 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 | `/se:pr` | Self-reviewed PR with why-focused description and risk callouts |
 | `/se:status` | Runs `se` and helps act on its anomalies |
 | `/se:retro` | User-invoked look-back at the session/branch; classifies each finding as mechanical (a guard rule, `se` verb, or test) or judgement (a principle or skill edit) |
-| `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal); `se debt` ledgers `se-debt:` markers — all zero LLM tokens |
+| `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal); `se debt` ledgers `se-debt:` markers; `se codex` reports whether the Codex CLI is installed and logged in — all zero LLM tokens |
+
+**Optional Codex second opinion.** When the Codex CLI is installed and
+logged in (`se codex` says `ready`), `/se:plan`, `/se:review` and
+`/se:debug` each offer it in one line — a second model on the plan, on the
+diff (uncommitted work or the current branch against its base), or on a
+debug that has run out of hypotheses (read-only, redacted input). Without
+Codex nothing changes and nothing is said.
 
 ## You know it is working when
 
@@ -263,7 +270,7 @@ staff-engineer-plugin/
 ├── .claude-plugin/          # plugin.json + marketplace.json
 ├── PRINCIPLES.md            # always-on principles (SessionStart hook cats this)
 ├── PRINCIPLES-SUBAGENT.md   # digest injected into every delegated agent
-├── bin/se                   # workflow CLI: status · env · baseline · teardown · debt
+├── bin/se                   # workflow CLI: status · env · baseline · teardown · debt · codex
 ├── skills/                  # setup · worktree · grill · plan · check-sins · review · test · debug · commit · pr · status · retro
 ├── agents/                  # builder (sonnet) · staff-reviewer · inquisitor · explainer (sonnet)
 ├── hooks/                   # SessionStart + SubagentStart injections, PreToolUse → git-guard.sh · scratchpad-guard.sh

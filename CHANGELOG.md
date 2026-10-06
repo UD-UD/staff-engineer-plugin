@@ -15,6 +15,16 @@ release first.
   list of angles that held, and a DAMNED / PENANCE / ABSOLVED verdict.
   `plan` offers it before approval; `pr` offers it before the description,
   and sins accepted as risk land in the PR's Risk section.
+- Optional Codex second opinion: `se codex` reports whether the Codex CLI
+  is installed and logged in. When it is, `plan` offers a Codex review of
+  the plan combined with the check-sins offer, `review` offers `codex
+  review` for uncommitted work or the current branch against its base (as
+  a verified `[codex]` addendum), and `debug` offers a read-only Codex
+  diagnosis on redacted input once every hypothesis is dead. Every run gets
+  a snapshot input and a fresh result; a failure is reported, never read as
+  "no findings".
+- `debug` step 4 now says what to do when a hypothesis dies, and when all
+  of them have.
 
 ## [0.2.0] - 2026-09-21
 

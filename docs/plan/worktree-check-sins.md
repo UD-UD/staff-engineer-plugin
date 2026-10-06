@@ -84,9 +84,10 @@ Alternatives considered:
 - `docs/decisions.md` — entry with the rejected alternatives above.
 
 ## Non-goals
-- No Codex / second-model pass.
-- No hook, no automatic gate, no new `se` verb.
-- No change to `review` or `staff-reviewer`.
+(Part 1 only — Part 2 below adds Codex, an `se` verb, and a `review` change.)
+- No Codex / second-model pass inside check-sins.
+- No hook, no automatic gate, no new `se` verb in part 1.
+- No change to `review` or `staff-reviewer` in part 1.
 - No new test file: the existing manifest suite already checks every skill's
   and agent's frontmatter generically; the skill itself is prose.
 
@@ -126,3 +127,122 @@ Wave 2 (parallel):
 Wave 3:
 - [x] 6. dogfood /se:check-sins on this branch diff → verify: report has steelman, cited sins, Clean list, verdict line
   (ran the inquisitor prompt via a general-purpose agent — the installed plugin predates it. Verdict PENANCE, 3 Venial sins, all acted on: untracked files now passed to the agent; accepted risks written to the plan file and read by `pr`; dismissed sins logged as `Dismissed sin —`, not `Rejected —`.)
+
+---
+
+# Part 2: optional Codex integration
+
+Status: DRAFT r3, awaiting approval. r2 acted on all 5 inquisitor sins; r3
+acted on Codex's second opinion (scopes, completion contract, inline
+review path, failure test) — user, 2026-10-06.
+
+## Problem
+When the Codex CLI is installed and logged in, `se` should offer it as a
+second model at the three points where a different model's blind spots help
+most — a freshly generated plan, a code review, a stuck debug — and behave
+exactly as today when it is not.
+
+## Decisions already made (user, 2026-10-06)
+- Codex plugs into `plan`, `review` and `debug`. Not inside `check-sins`
+  (declined earlier), not `pr`, not builders.
+- Always offered in one line, never automatic. In `plan`, one combined offer
+  with check-sins: "Check this plan for sins? (+ Codex second opinion)";
+  each check still runs separately and independently.
+- Detection: `se codex` — CLI on PATH, then `codex login status`.
+- No per-project off switch; declining is the off switch.
+
+## Facts found
+- Codex CLI 0.160.0; `codex login status` exits 0 when logged in (~0.05s).
+- `codex review` takes `--uncommitted`, `--base <branch>`, `--commit <sha>`;
+  no commit range, no PR. `codex exec -s read-only -o <file>` runs with no
+  write access and saves the final answer to a file.
+- The Codex plugin's `/codex:review` and `/codex:adversarial-review` are
+  `disable-model-invocation: true`; skills cannot call them. We call the CLI.
+- Dogfood lesson: Codex read a plan file that was being rewritten under it.
+  Codex is always given a snapshot, never a live file.
+
+## Approach
+- **`se codex`** (new verb, zero LLM): `codex: ready (<version>)` exit 0;
+  `codex: not installed` exit 1; `codex: installed but not logged in — run
+  codex login` exit 1. Added to both case lists in `bin/se` (validation and
+  dispatch) and the usage block.
+- **Run contract (all three call sites):** Codex gets a snapshot written
+  once for this run (`scratchpad/codex-<site>-input.md`) and writes a fresh
+  result file (removed before the run). The skill collects the task, checks
+  the exit status, and reads the result only if this run wrote it. Any
+  failure is reported as `Codex failed: <reason>`, never as "no findings".
+- **`plan`**: the existing check-sins offer becomes the combined offer when
+  `se codex` is ready (unchanged when not). The offer names what leaves the
+  machine: "the plan text goes to Codex (OpenAI)". On yes: `codex exec -s
+  read-only` on the plan snapshot and the repo — never the session's
+  reasoning or the inquisitor's findings. Its points are shown beside the
+  check-sins report (agreements marked) and go through the same act /
+  accept / reject round.
+- **`review`**: once the first review is done — delegated to staff-reviewer
+  or inline — offer Codex only for the two scopes where it reviews the same
+  diff: uncommitted (`codex review --uncommitted`) and the **current branch**
+  against its base (`codex review --base <base>`). Commit ranges, other
+  branches and PRs: no offer, and say why in one line. Codex runs in the
+  background; the first report is presented as today; Codex findings arrive
+  as an addendum — each passes "Verification before reporting", is tagged
+  `[codex]`, duplicates noted as "both models found it", page re-published.
+  An accepted second opinion finishes before the review's final verdict.
+- **`debug`**: step 4 gains the missing loop-back — a killed hypothesis
+  moves to the next; when every listed hypothesis is dead, return to step 3
+  for a new list, or — if `se codex` is ready — offer a Codex diagnosis. The
+  offer says what is sent: the red command, the minimised repro, and the
+  ruled-out hypotheses with their evidence, all through the Redact rule
+  first. `codex exec -s read-only`. Codex diagnoses only; its answer becomes
+  a new hypothesis tested by the normal loop; the fix still lands with a
+  regression test (step 5).
+- **Part 1 reconciled**: part 1 Non-goals scoped (done in this plan);
+  `docs/decisions.md` "Rejected — a second-model (Codex) pass" becomes
+  "Rejected — a Codex pass inside check-sins"; new decision entry for Codex.
+
+Alternatives considered:
+- *Call the Codex plugin's `/codex:*` commands* — rejected: not invocable by
+  skills; would depend on another plugin's file layout.
+- *`command -v codex` only* — rejected: a logged-out Codex fails mid-run.
+- *Let the model detect Codex* — rejected: mechanical → `bin/se`.
+- *Codex writes the debug fix* — rejected: bypasses regression-test-first.
+- *Codex on ranges/PRs via `--commit` per SHA or a diff in `exec`* —
+  rejected: N runs or a hand-built diff; the result is not the reviewed diff.
+- *Scripted end-to-end tests of the skill text* (Codex point 5) — rejected:
+  skills are prose an LLM follows; no deterministic runner exists. The
+  testable parts (`se codex` outcomes incl. failure) are tested; the rest
+  gets live checks.
+
+## Files touched
+- `bin/se` — `codex` verb (both case lists + usage).
+- `tests/test-se.sh` — `se codex` outcomes with stub `codex` on a fakebin
+  PATH (existing pattern): ready, not installed, not logged in.
+- `skills/plan/SKILL.md` — combined offer + run contract.
+- `skills/review/SKILL.md` — scoped offer, addendum, run contract.
+- `skills/debug/SKILL.md` — step-4 loop-back + redacted hand-off.
+- `docs/decisions.md` — reword the Rejected entry; add the Codex entry.
+- `README.md`, `CHANGELOG.md`.
+
+## Non-goals
+- No Codex inside check-sins, in `pr`, or as a builder.
+- No config switch, hook, or stop-gate; no dependency on the Codex plugin.
+- Nothing changes when Codex is absent — no nag, no hint.
+
+## Risks
+- Codex CLI flags change → skills name exact commands; `se codex` prints
+  the version.
+- Data leaves the machine → every offer names what is sent; debug redacts.
+- Slow Codex runs → background; the first report never waits, but the
+  final verdict does.
+
+## Part 2 TODO
+Wave 1 (parallel):
+- [x] 7. failing tests for `se codex`: ready / not installed / not logged in → verify: red for the right reason (unknown command)
+- [x] 8. `plan` combined offer + run contract → verify: wording unchanged when Codex absent; offer names what is sent
+- [x] 9. `review` scoped offer + addendum + run contract → verify: no offer for range/PR/other-branch scopes; verdict waits for an accepted Codex run
+- [x] 10. `debug` step-4 loop-back + redacted hand-off → verify: offer reachable only after every hypothesis is dead
+- [x] 11. decisions.md reworded + Codex entry → verify: `grep -n Codex docs/decisions.md` shows no unscoped rejection
+Wave 2:
+- [x] 12. `se codex` verb → verify: step-7 tests green; full suite green
+- [x] 13. README + CHANGELOG → verify: suite green
+Wave 3:
+- [ ] 14. live checks, following the worktree's skill text → verify: `bin/se codex` prints ready; with codex hidden from PATH `bin/se codex` exits 1 and no offer is made; a Codex review addendum on this branch yields `[codex]` findings or an explicit "Codex: no findings"

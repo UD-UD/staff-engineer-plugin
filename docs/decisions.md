@@ -2,6 +2,35 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-10-06 — Optional Codex second opinion via the CLI, detected by `se codex`
+
+**Decided.** When the Codex CLI is installed and logged in (`se codex`:
+`command -v codex`, then `codex login status`), `plan`, `review` and
+`debug` offer it in one line as a second model; nothing changes when it is
+not. `plan` combines the offer with check-sins; `review` offers it only for
+uncommitted work and the current branch against its base (the two scopes
+`codex review` reviews identically); `debug` offers a read-only diagnosis
+once every hypothesis is dead, with redacted input. Every run gets a
+snapshot as input and a fresh result file; a failure is reported, never
+read as "no findings". The plan for this was itself checked by both the
+inquisitor and Codex: they overlapped on 2 points and each caught issues
+the other missed.
+
+**Rejected — calling the Codex plugin's `/codex:review` or
+`/codex:adversarial-review`.** Both are `disable-model-invocation: true`,
+so a skill cannot call them, and it would tie `se` to another plugin's file
+layout.
+
+**Rejected — detecting with `command -v codex` alone.** A logged-out Codex
+would fail mid-review; the login check costs ~0.05s.
+
+**Rejected — Codex writing the debug fix.** It would bypass
+regression-test-first and edit the tree outside the session's control.
+
+**Rejected — Codex on commit ranges or PRs.** `codex review` only takes
+uncommitted, a base branch, or one commit; anything else reviews a
+different diff from the one the staff reviewer saw.
+
 ## 2026-10-06 — Adversarial review as `check-sins` + `inquisitor`, offered not forced
 
 **Decided.** A new skill `check-sins` delegates a plan or a branch change to
@@ -30,7 +59,9 @@ the plan is the worst one to attack it.
 **Rejected — always-on, or a stop-hook gate.** The user asked to be
 prompted; a gate on every plan and turn is noisy and costly.
 
-**Rejected — a second-model (Codex) pass.** User's call; not wanted.
+**Rejected — a Codex pass inside check-sins.** User's call; not wanted.
+Codex is offered beside check-sins in `plan`, not inside it (see the
+Codex entry above).
 
 **Rejected — a separate skeptic or validator agent per finding.** Token
 cost; the skeptic is a step inside the inquisitor. Revisit if false alarms
