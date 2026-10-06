@@ -111,3 +111,38 @@ finding stated in simple words with its real-world consequence — and share
 the link. Include the Plan conformance block in the hand-off when it has
 content. The terminal keeps the compact `file:line` version; the artifact is
 the one a human reads end to end.
+
+## Codex second opinion
+
+Only when `se codex` prints `codex: ready (...)` and exits 0. Otherwise say
+nothing about Codex.
+
+Once the first review is done — delegated to staff-reviewer or done inline —
+present that report as above, then offer in one line, naming what leaves the
+machine: "Also get a Codex second opinion? (the diff goes to Codex/OpenAI)".
+Never automatic; declining is the off switch.
+
+Codex can review only two scopes: uncommitted work (`codex review
+--uncommitted`) and the current branch against its base (`codex review --base
+<base>`). For a commit range, another branch, or a PR, make no offer — say in
+one line that Codex can only review uncommitted work or the current branch
+against its base.
+
+Run contract:
+
+1. Remove any old result file first, so a stale one is never read.
+2. Run it in the background, writing a fresh result under `scratchpad/`, e.g.
+   `codex review --uncommitted > scratchpad/codex-review.md 2>&1`.
+3. Collect the task and check its exit status. Read the result only if this
+   run wrote it.
+4. Any failure is reported as `Codex failed: <reason>` — never as "no
+   findings".
+
+Codex findings arrive as an addendum to the first report, not a rewrite of it.
+Each one must pass "Verification before reporting" like any other finding and
+is tagged `[codex]`. A finding that duplicates one already reported is noted
+"both models found it" instead of repeated. If nothing survives, say "Codex:
+no findings survived verification." Re-publish the explainer page with the
+addendum included.
+
+If the user accepted the second opinion, the one-line verdict waits for it.
