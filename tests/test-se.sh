@@ -771,5 +771,45 @@ else
 fi
 rm -rf "$pickhome"
 
+# --- se codex: is the Codex CLI usable? ------------------------------------
+# A stub codex whose `login status` exit code is controlled by FAKE_LOGIN_RC,
+# and whose login output carries a marker that must never be echoed. The
+# "not installed" PATH holds only symlinks to the tools se needs, so a real
+# codex (e.g. under ~/.nvm) cannot leak in.
+codexbin="$tmpdir/codexbin"
+essbin="$tmpdir/essbin"
+mkdir -p "$codexbin" "$essbin"
+cat > "$codexbin/codex" <<'CODEXEOF'
+#!/bin/sh
+case "$1" in
+  --version) echo "codex-cli 0.160.0" ;;
+  login) echo "Logged in as secret-account@example.com"; exit "${FAKE_LOGIN_RC:-0}" ;;
+esac
+CODEXEOF
+chmod +x "$codexbin/codex"
+for tool in bash sh env git sed cat grep date stat tr head; do
+  tp=$(command -v "$tool" 2>/dev/null) && [ -x "$tp" ] && ln -sf "$tp" "$essbin/$tool"
+done
+
+out=$(cd "$main" && PATH="$codexbin:$essbin" FAKE_LOGIN_RC=0 "$se" codex 2>&1); rc=$?
+assert_exit "codex: ready exits 0" 0 "$rc"
+assert_true "codex: ready prints exactly the ready line" "$([ "$out" = "codex: ready (codex-cli 0.160.0)" ] && echo 0 || echo 1)"
+
+out=$(cd "$main" && PATH="$codexbin:$essbin" FAKE_LOGIN_RC=1 "$se" codex 2>&1); rc=$?
+assert_exit "codex: not logged in exits 1" 1 "$rc"
+assert_true "codex: not logged in prints exactly the login line" "$([ "$out" = "codex: installed but not logged in — run codex login" ] && echo 0 || echo 1)"
+assert_not_contains "codex: never prints login status output" "$out" "secret-account"
+
+out=$(cd "$main" && PATH="$essbin" "$se" codex 2>&1); rc=$?
+assert_exit "codex: not installed exits 1" 1 "$rc"
+assert_true "codex: not installed prints exactly the not-installed line" "$([ "$out" = "codex: not installed" ] && echo 0 || echo 1)"
+
+# Outside any git repo the verb must still work (it needs no repo state).
+nogit="$tmpdir/nogit"
+mkdir -p "$nogit"
+out=$(cd "$nogit" && PATH="$codexbin:$essbin" FAKE_LOGIN_RC=0 "$se" codex 2>&1); rc=$?
+assert_exit "codex: works outside a git repo (exit 0)" 0 "$rc"
+assert_true "codex: outside a git repo prints the ready line" "$([ "$out" = "codex: ready (codex-cli 0.160.0)" ] && echo 0 || echo 1)"
+
 printf 'RESULT pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
