@@ -217,7 +217,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 logged in (`se codex` says `ready`), `/se:plan`, `/se:review` and
 `/se:debug` each offer it in one line — a second model on the plan, on the
 diff (uncommitted work or the current branch against its base), or on a
-debug that has run out of hypotheses (read-only, redacted input). Without
+debug that has run out of hypotheses (read-only, redacted note). Each offer says Codex can also read any file in the repo. Without
 Codex nothing changes and nothing is said.
 
 ## You know it is working when
@@ -274,7 +274,7 @@ staff-engineer-plugin/
 ├── skills/                  # setup · worktree · grill · plan · check-sins · review · test · debug · commit · pr · status · retro
 ├── agents/                  # builder (sonnet) · staff-reviewer · inquisitor · explainer (sonnet)
 ├── hooks/                   # SessionStart + SubagentStart injections, PreToolUse → git-guard.sh · scratchpad-guard.sh
-├── tests/                   # 252-assertion suite for the guards, the manifest, and every se verb
+├── tests/                   # 283-assertion suite for the guards, the manifest, and every se verb
 ├── .github/workflows/       # the same suite on every push and PR (macOS, bash 3.2)
 └── assets/                  # README art
 ```

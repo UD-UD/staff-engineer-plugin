@@ -132,7 +132,7 @@ Wave 3:
 
 # Part 2: optional Codex integration
 
-Status: DRAFT r3, awaiting approval. r2 acted on all 5 inquisitor sins; r3
+Status: APPROVED 2026-10-06 (r3). Implemented; self-review fixes below. r2 acted on all 5 inquisitor sins; r3
 acted on Codex's second opinion (scopes, completion contract, inline
 review path, failure test) — user, 2026-10-06.
 
@@ -245,4 +245,5 @@ Wave 2:
 - [x] 12. `se codex` verb → verify: step-7 tests green; full suite green
 - [x] 13. README + CHANGELOG → verify: suite green
 Wave 3:
-- [ ] 14. live checks, following the worktree's skill text → verify: `bin/se codex` prints ready; with codex hidden from PATH `bin/se codex` exits 1 and no offer is made; a Codex review addendum on this branch yields `[codex]` findings or an explicit "Codex: no findings"
+- [x] 14. live checks, following the worktree's skill text → verify: `bin/se codex` prints ready; with codex hidden from PATH `bin/se codex` exits 1 and no offer is made; a Codex review addendum on this branch yields `[codex]` findings or an explicit "Codex: no findings"
+  (`se codex` ready/exit 0; hidden from PATH → `not installed`/exit 1. `codex review --base main` returned 2 `[codex]` findings, both verified and fixed. Self-review fixes from staff-reviewer + Codex: every offer now says Codex can read any repo file — read-only stops writes, not reads; `--base` offered only on a clean tree; review's first verdict is provisional and restated after the addendum, and no edits while Codex runs (review cannot snapshot — Codex reads the live tree); plan starts Codex first and check-sins joins its points into its own round, with Codex-only runs recorded per check-sins step 4.)

@@ -20,7 +20,7 @@ release first.
   the plan combined with the check-sins offer, `review` offers `codex
   review` for uncommitted work or the current branch against its base (as
   a verified `[codex]` addendum), and `debug` offers a read-only Codex
-  diagnosis on redacted input once every hypothesis is dead. Every run gets
+  diagnosis on a redacted note once every hypothesis is dead. Every offer says Codex can read any file in the repo. Every run gets
   a snapshot input and a fresh result; a failure is reported, never read as
   "no findings".
 - `debug` step 4 now says what to do when a hypothesis dies, and when all

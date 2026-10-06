@@ -10,8 +10,8 @@ Newest first. Each entry: what was decided, what was rejected, and why.
 not. `plan` combines the offer with check-sins; `review` offers it only for
 uncommitted work and the current branch against its base (the two scopes
 `codex review` reviews identically); `debug` offers a read-only diagnosis
-once every hypothesis is dead, with redacted input. Every run gets a
-snapshot as input and a fresh result file; a failure is reported, never
+once every hypothesis is dead, from a redacted note. Each offer says Codex can read any file in the repo (a read-only sandbox stops writes, not reads). Plan and debug runs get a
+snapshot as input, review holds edits until Codex is collected, and every run writes a fresh result file; a failure is reported, never
 read as "no findings". The plan for this was itself checked by both the
 inquisitor and Codex: they overlapped on 2 points and each caught issues
 the other missed.
