@@ -46,7 +46,7 @@ could not run.
 
 ### 3. Present
 
-If the caller passed a Codex result path (the `plan` skill does, when the
+If the caller passed a Codex result path (`plan` and `pr` do, when the
 user also took a Codex second opinion), wait for that run to be collected
 and add its points after the sins, tagged `[codex]`, marking any that match
 a sin as "both found it". A failed run is shown as `Codex failed: <reason>`.

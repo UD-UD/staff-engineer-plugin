@@ -14,8 +14,9 @@ fast: explain why, surface the risk, and arrive pre-reviewed.
 
 Review the **full branch diff against the base branch**
 (`git diff <base>...HEAD`), not just the last commit — use the plugin's
-`review` skill / staff-reviewer agent for this. Fix blockers before opening
-the PR. A PR opened with known defects wastes the reviewer's pass.
+`review` skill / staff-reviewer agent for this, without its Codex offer —
+step 3 makes one combined offer instead. Fix blockers before opening the PR.
+A PR opened with known defects wastes the reviewer's pass.
 
 **Done when:** the reviewer's report is in hand and every Blocker is fixed.
 
@@ -30,17 +31,33 @@ the PR. A PR opened with known defects wastes the reviewer's pass.
 **Done when:** tests pass, the diff is clean, and the commit history reads
 well.
 
-### 3. Offer a sin check
+### 3. Offer a sin check (+ Codex)
 
 Offer an adversarial pass in one line: "Want me to check this branch for
-sins before the PR?" On yes, call the Skill tool with `"check-sins"` in
-change mode. Sins the user chooses to act on are fixed (back to step 1 for
-the new commits); sins accepted as risk are carried into the Risk section —
+sins before the PR?" When `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` prints
+`codex: ready` and `git status --porcelain` is empty, make it the one
+combined offer instead: "Check this branch for sins? (+ Codex second
+opinion — Codex/OpenAI gets the diff and can read any file in this repo,
+including gitignored ones like `.env`)". The user may take either, both, or
+neither; otherwise say nothing about Codex.
+
+- **Codex half:** start it first, in the background, as the `review`
+  skill's "Codex second opinion" section runs it for the current branch
+  against its base (`--base <base>`, same run contract). Make no edits
+  until it is collected.
+- **Check-sins half:** call the Skill tool with `"check-sins"` in change
+  mode, passing the Codex result path when both were taken, so its points
+  join the sins' act / accept / reject round. When only Codex was taken,
+  verify its points as `review` does and run that round yourself.
+
+Items the user chooses to act on are fixed (back to step 1 for the new
+commits); items accepted as risk are carried into the Risk section —
 including any already in the plan file's `## Accepted risks` from an
 earlier run. Any plan-file edit this step makes is committed before moving
 on, so step 2's clean-diff check still holds.
 
-**Done when:** the user has skipped it, or every sin has the user's decision.
+**Done when:** the user has skipped it, or every sin and `[codex]` point
+has the user's decision.
 
 ### 4. Write the description
 

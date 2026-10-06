@@ -116,7 +116,9 @@ the one a human reads end to end.
 
 Only when `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` prints `codex: ready (...)`
 and exits 0 — the plugin's own copy, because `se` on PATH can be an older
-checkout with no `codex` verb, which would silently hide the offer. Otherwise say
+checkout with no `codex` verb, which would silently hide the offer. When the
+`pr` skill is the caller, skip this offer: `pr` makes one combined offer at
+its step 3. Otherwise say
 nothing about Codex.
 
 Once the first review is done — delegated to staff-reviewer or done inline —
