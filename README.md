@@ -214,7 +214,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 | `se` *(terminal)* | The deterministic status board — works with or without Claude running. `se env` / `se baseline` / `se teardown <name>` run the worktree skill's mechanical steps (config-driven env setup, baseline capture, safe removal); `se debt` ledgers `se-debt:` markers; `se codex` reports whether the Codex CLI is installed and logged in — all zero LLM tokens |
 
 **Optional Codex second opinion.** When the Codex CLI is installed and
-logged in (`se codex` says `ready`), `/se:plan`, `/se:review` and
+logged in (`se codex` says `ready`), `/se:plan`, `/se:pr`, `/se:review` and
 `/se:debug` each offer it in one line — a second model on the plan, on the
 diff (uncommitted work or the current branch against its base), or on a
 debug that has run out of hypotheses (read-only, redacted note). Each offer says Codex can also read any file in the repo. Without

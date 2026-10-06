@@ -144,7 +144,7 @@ exactly as today when it is not.
 
 ## Decisions already made (user, 2026-10-06)
 - Codex plugs into `plan`, `review` and `debug`. Not inside `check-sins`
-  (declined earlier), not `pr`, not builders.
+  (declined earlier), not builders. (`pr` was added 2026-10-07 — see TODO 16.)
 - Always offered in one line, never automatic. In `plan`, one combined offer
   with check-sins: "Check this plan for sins? (+ Codex second opinion)";
   each check still runs separately and independently.
@@ -223,7 +223,7 @@ Alternatives considered:
 - `README.md`, `CHANGELOG.md`.
 
 ## Non-goals
-- No Codex inside check-sins, in `pr`, or as a builder.
+- No Codex inside check-sins or as a builder.
 - No config switch, hook, or stop-gate; no dependency on the Codex plugin.
 - Nothing changes when Codex is absent — no nag, no hint.
 
@@ -249,3 +249,5 @@ Wave 3:
   (`se codex` ready/exit 0; hidden from PATH → `not installed`/exit 1. `codex review --base main` returned 2 `[codex]` findings, both verified and fixed. Self-review fixes from staff-reviewer + Codex: every offer now says Codex can read any repo file — read-only stops writes, not reads; `--base` offered only on a clean tree; review's first verdict is provisional and restated after the addendum, and no edits while Codex runs (review cannot snapshot — Codex reads the live tree); plan starts Codex first and check-sins joins its points into its own round, with Codex-only runs recorded per check-sins step 4.)
 - [x] 15. smoke tests: headless `claude -p --plugin-dir` sessions on a throwaway fixture repo, user answers given in the prompt → verify: each flow runs as written with the plugin installed
   (A plan + check-sins + Codex, B review + Codex, C review with Codex hidden, D debug hand-off: all pass. Fixed on the way: skills called `se codex` from PATH, which is the main checkout's older `bin/se` with no `codex` verb, so the offer silently never appeared; skills now call `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex`. `codex review` saved its whole working log; review now uses `codex exec review … -o` for the final answer only. The model once dispatched the inquisitor directly with a placeholder prompt; its description now says check-sins only. Codex can read `scratchpad/`, where the session's own theory and check-sins reports live; the plan and debug instructions now tell it to read nothing there but its input. Not plugin bugs, from the test setup: writes under `.claude/` are refused in headless acceptEdits; scratchpad-guard refuses a fixture placed inside the harness temp dir.)
+- [x] 16. one offer per PR (user, 2026-10-07): `pr` step 1 runs `review` without its Codex offer; step 3 makes the combined "sins (+ Codex)" offer, Codex on `--base` only with a clean tree, its points joining check-sins' round → verify: smoke E (`/se:pr` headless) shows exactly one offer line and both halves run
+  (smoke E passed: one offer line; review's own Codex offer skipped as caller=pr; `codex exec review --base main` exit 0, no findings; check-sins PENANCE, 4 sins all accepted → PR body `## Risk`.)

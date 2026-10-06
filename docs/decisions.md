@@ -5,9 +5,9 @@ Newest first. Each entry: what was decided, what was rejected, and why.
 ## 2026-10-06 — Optional Codex second opinion via the CLI, detected by `se codex`
 
 **Decided.** When the Codex CLI is installed and logged in (`se codex`:
-`command -v codex`, then `codex login status`), `plan`, `review` and
+`command -v codex`, then `codex login status`), `plan`, `pr`, `review` and
 `debug` offer it in one line as a second model; nothing changes when it is
-not. `plan` combines the offer with check-sins; `review` offers it only for
+not. `plan` and `pr` combine the offer with check-sins (`pr` once, not in its self-review too); `review` offers it only for
 uncommitted work and the current branch against its base (the two scopes
 `codex review` reviews identically); `debug` offers a read-only diagnosis
 once every hypothesis is dead, from a redacted note. Each offer says Codex can read any file in the repo (a read-only sandbox stops writes, not reads). Plan and debug runs get a

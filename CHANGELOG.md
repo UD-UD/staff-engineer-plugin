@@ -17,7 +17,9 @@ release first.
   and sins accepted as risk land in the PR's Risk section.
 - Optional Codex second opinion: `se codex` reports whether the Codex CLI
   is installed and logged in. When it is, `plan` offers a Codex review of
-  the plan combined with the check-sins offer, `review` offers `codex
+  the plan combined with the check-sins offer, `pr` makes the same single
+  combined offer for the branch (its self-review skips review's own Codex
+  offer, so a PR asks once), `review` offers `codex
   review` for uncommitted work or the current branch against its base (as
   a verified `[codex]` addendum), and `debug` offers a read-only Codex
   diagnosis on a redacted note once every hypothesis is dead. Every offer says Codex can read any file in the repo. Every run gets
