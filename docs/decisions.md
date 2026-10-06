@@ -2,6 +2,40 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-10-06 — Adversarial review as `check-sins` + `inquisitor`, offered not forced
+
+**Decided.** A new skill `check-sins` delegates a plan or a branch change to
+a new read-only `inquisitor` agent that assumes the target is broken and
+tries to prove how. Ideas taken from a survey of eight existing tools
+(Codex `adversarial-review`, gstack, Anthropic `/code-review` and
+`/security-review`, superpowers, bug-hunter, `/premortem`, `the-fool`):
+fresh context with no author reasoning, steelman before attack, every sin
+cited with what would disprove it, a built-in skeptic step, at most 5
+sins, a Clean list as proof of coverage, a forced verdict line naming its
+finding, and a 3-round cap. `plan` offers it before approval; `pr` offers
+it before the description. The user decides each sin; nothing is fixed or
+dismissed by the session. A dismissed sin is logged as `Dismissed sin —`,
+never `Rejected —`: `plan` and the inquisitor read `Rejected —` as "idea
+not adopted", so a later fix for that sin would look like reopening it. Category names are our own (Mortal / Venial /
+Unconfessed / Clean; DAMNED / PENANCE / ABSOLVED), defined only in the
+agent.
+
+**Rejected — a mode on `review` / `staff-reviewer`.** Opposite stance:
+review assumes a competent author and is diff-only; mixing the two blurs
+both reports.
+
+**Rejected — running inline in the main session.** The session that wrote
+the plan is the worst one to attack it.
+
+**Rejected — always-on, or a stop-hook gate.** The user asked to be
+prompted; a gate on every plan and turn is noisy and costly.
+
+**Rejected — a second-model (Codex) pass.** User's call; not wanted.
+
+**Rejected — a separate skeptic or validator agent per finding.** Token
+cost; the skeptic is a step inside the inquisitor. Revisit if false alarms
+get through.
+
 ## 2026-09-21 — Adopt select ideas from the mattpocock/skills review, reject the rest
 
 **Decided.** Extend what already exists rather than restructure, and add

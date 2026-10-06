@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file, in
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) style. Newest
 release first.
 
+## [Unreleased]
+
+### Added
+
+- `check-sins` skill and read-only `inquisitor` agent: an adversarial pass
+  that assumes a plan or branch change is broken and tries to prove how —
+  steelman first, every sin cited with what would disprove it, a built-in
+  skeptic step, at most 5 sins (Mortal / Venial / Unconfessed), a Clean
+  list of angles that held, and a DAMNED / PENANCE / ABSOLVED verdict.
+  `plan` offers it before approval; `pr` offers it before the description,
+  and sins accepted as risk land in the PR's Risk section.
+
 ## [0.2.0] - 2026-09-21
 
 Adopts the items marked "adopt" in the mattpocock/skills review (see

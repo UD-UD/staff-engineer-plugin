@@ -6,8 +6,8 @@
 
 ![version](https://img.shields.io/badge/version-0.2.0-1D6FA5)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-1C2733)
-![skills](https://img.shields.io/badge/skills-11-8CC8F0)
-![agents](https://img.shields.io/badge/agents-3-A78BD4)
+![skills](https://img.shields.io/badge/skills-12-8CC8F0)
+![agents](https://img.shields.io/badge/agents-4-A78BD4)
 ![zero LLM CLI](https://img.shields.io/badge/se%20CLI-zero%20LLM-2C7A52)
 [![tests](https://img.shields.io/github/actions/workflow/status/UD-UD/staff-engineer-plugin/test.yml?branch=main&label=tests)](https://github.com/UD-UD/staff-engineer-plugin/actions/workflows/test.yml)
 
@@ -32,7 +32,7 @@ merged PR, and nothing (not even the AI's own habits) can shortcut it.
 |---|---|
 | **Principles** | 10 rules injected into context at every session start, resume, and compaction: think before coding, simplicity first, surgical changes, goal-driven execution (every stage boundary waits for your approval), SOLID by default, tests are the holy grail, no agent authorship in commits, project organization, respected code, quiet execution |
 | **Skills** | The workflow verbs, invoked as `/se:<name>` or auto-triggered when the moment matches |
-| **Agents** | Parallel **Sonnet builders** implement independent plan steps; a read-only **staff-reviewer** hunts verified bugs with no memory of writing the code; a plain-English **explainer** publishes plans and reviews as readable artifact pages |
+| **Agents** | Parallel **Sonnet builders** implement independent plan steps; a read-only **staff-reviewer** hunts verified bugs with no memory of writing the code; a read-only **inquisitor** assumes a plan or change is broken and tries to prove how; a plain-English **explainer** publishes plans and reviews as readable artifact pages |
 | **Hooks** | Shell guardrails on every git command — they cannot be argued with |
 | **CLI** | `se` — the deterministic workflow CLI: the status board plus `env` / `baseline` / `teardown` / `debt`, all built from durable on-disk state; zero tokens, correct right after a reboot |
 
@@ -203,6 +203,7 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
 | `/se:worktree` | Start a feature: worktree, isolated env, baseline, plan; safe teardown after merge |
 | `/se:grill` | Interview the user in numbered rounds, each question with a recommended answer, until nothing about the design is left silently assumed; called by `plan` and `setup` |
 | `/se:plan` | Staff-engineer plan → `docs/plan/<branch>.md` with wave-grouped TODO |
+| `/se:check-sins` | Adversarial pass: the read-only inquisitor assumes a plan or branch change is broken and reports at most 5 cited sins (Mortal / Venial / Unconfessed), what held, and a verdict; offered by `plan` and `pr` |
 | `/se:review` | Verified-findings-only review of the working diff plus a plan-conformance check (delegates to staff-reviewer) |
 | `/se:test` | Testing discipline: regression-test-first, right level, never weaken a test, three named anti-patterns to avoid |
 | `/se:debug` | Six-phase debugging loop: deterministic red command first, minimise, 3–5 falsifiable hypotheses, one variable at a time, regression test, cleanup |
@@ -222,6 +223,9 @@ Human co-author trailers, `--force-with-lease`, and normal commits all pass.
   understanding restated back, not a fresh open question.
 - **`/se:plan`** — `docs/plan/<branch>.md` exists, ending in a
   wave-grouped TODO checklist.
+- **`/se:check-sins`** — the report ends on one line, `Verdict: DAMNED |
+  PENANCE | ABSOLVED because <a specific finding>`, and every sin cites a
+  `file:line` or plan line.
 - **`/se:review`** — findings come back as `file:line` — defect — scenario
   — fix, ranked blocker / should-fix / consider.
 - **`/se:test`** — a regression test is red before the fix and green after.
@@ -260,8 +264,8 @@ staff-engineer-plugin/
 ├── PRINCIPLES.md            # always-on principles (SessionStart hook cats this)
 ├── PRINCIPLES-SUBAGENT.md   # digest injected into every delegated agent
 ├── bin/se                   # workflow CLI: status · env · baseline · teardown · debt
-├── skills/                  # setup · worktree · grill · plan · review · test · debug · commit · pr · status · retro
-├── agents/                  # builder (sonnet) · staff-reviewer · explainer (sonnet)
+├── skills/                  # setup · worktree · grill · plan · check-sins · review · test · debug · commit · pr · status · retro
+├── agents/                  # builder (sonnet) · staff-reviewer · inquisitor · explainer (sonnet)
 ├── hooks/                   # SessionStart + SubagentStart injections, PreToolUse → git-guard.sh · scratchpad-guard.sh
 ├── tests/                   # 252-assertion suite for the guards, the manifest, and every se verb
 ├── .github/workflows/       # the same suite on every push and PR (macOS, bash 3.2)
