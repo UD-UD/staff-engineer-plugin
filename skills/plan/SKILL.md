@@ -105,7 +105,9 @@ this plan for sins before you approve?" On yes, call the Skill tool with
 `"check-sins"` in plan mode; sins the user chooses to act on revise the plan,
 which is presented again. Skipping it is a normal answer, not a warning.
 
-When `se codex` prints `codex: ready`, make it one combined offer instead:
+When `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` — the plugin's own copy, not
+whatever `se` is on PATH, which can be an older checkout that has no
+`codex` verb — prints `codex: ready`, make it one combined offer instead:
 "Check this plan for sins? (+ Codex second opinion — Codex/OpenAI gets the
 plan and can read any file in this repo, including gitignored ones like
 `.env`)". The user may take either, both, or neither; when Codex is not
@@ -118,7 +120,9 @@ so it runs while check-sins does. For the Codex half:
 - Run `codex exec -s read-only -o scratchpad/codex-plan-review.md` with an
   instruction to find the strongest reasons the plan is wrong, citing plan
   lines or `file:line`. Give it the snapshot and the repo only — never the
-  session's reasoning or the check-sins findings.
+  session's reasoning or the check-sins findings. `scratchpad/` holds those
+  (reports, drafts, notes) and Codex can read it, so the instruction says to
+  read nothing under `scratchpad/` except the snapshot.
 - Check the exit status and read the result only if this run wrote it; a
   failure is reported as `Codex failed: <reason>`, never as "no findings".
 - When both were taken, pass the result path to check-sins as its Codex

@@ -114,7 +114,9 @@ the one a human reads end to end.
 
 ## Codex second opinion
 
-Only when `se codex` prints `codex: ready (...)` and exits 0. Otherwise say
+Only when `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` prints `codex: ready (...)`
+and exits 0 — the plugin's own copy, because `se` on PATH can be an older
+checkout with no `codex` verb, which would silently hide the offer. Otherwise say
 nothing about Codex.
 
 Once the first review is done — delegated to staff-reviewer or done inline —
@@ -124,10 +126,10 @@ opinion? (Codex/OpenAI gets the diff and can read any file in this repo,
 including gitignored ones like `.env`)". Never automatic; declining is the
 off switch, and the verdict then stands as given.
 
-Codex can review only two scopes: uncommitted work (`codex review
---uncommitted`) and the current branch against its base (`codex review --base
-<base>`) — the latter only when `git status --porcelain` is empty, because
-with a dirty tree `codex review --base` also reads the uncommitted edits and
+Codex can review only two scopes: uncommitted work (`--uncommitted`) and the
+current branch against its base (`--base <base>`) — the latter only when
+`git status --porcelain` is empty, because with a dirty tree a `--base`
+review also reads the uncommitted edits and
 reviews a different diff from `git diff <base>...HEAD`. For a commit range,
 another branch, a PR, or a branch review on a dirty tree, make no offer —
 say in one line which of those it is and why.
@@ -135,8 +137,11 @@ say in one line which of those it is and why.
 Run contract:
 
 1. Remove any old result file first, so a stale one is never read.
-2. Run it in the background, writing a fresh result under `scratchpad/`, e.g.
-   `codex review --uncommitted > scratchpad/codex-review.md 2>&1`.
+2. Run it in the background through `codex exec review`, which saves only
+   Codex's final answer (plain `codex review` prints its whole working log):
+   `codex exec review -c sandbox_mode='"read-only"' --uncommitted -o
+   scratchpad/codex-review.md` (or `--base <base>` in place of
+   `--uncommitted`).
 3. Collect the task and check its exit status. Read the result only if this
    run wrote it.
 4. Any failure is reported as `Codex failed: <reason>` — never as "no
