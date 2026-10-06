@@ -100,6 +100,11 @@ Present the plan under these headings: **Problem**, **Approach** (chosen +
 alternatives considered), **Files touched**, **Non-goals**, **Risks**,
 **Steps**.
 
+Alongside the plan, offer an adversarial pass in one line: "Want me to check
+this plan for sins before you approve?" On yes, call the Skill tool with
+`"check-sins"` in plan mode; sins the user chooses to act on revise the plan,
+which is presented again. Skipping it is a normal answer, not a warning.
+
 **Then stop.** Reviewing the plan together is the cheapest place to catch a
 wrong assumption; after implementation starts, the same correction costs a
 rewrite. Ask for the user's go-ahead and wait for it — do not write code, do
