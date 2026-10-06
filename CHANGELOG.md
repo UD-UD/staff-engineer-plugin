@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file, in
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) style. Newest
 release first.
 
+## [Unreleased]
+
+### Added
+
+- `check-sins` skill and read-only `inquisitor` agent: an adversarial pass
+  that assumes a plan or branch change is broken and tries to prove how —
+  steelman first, every sin cited with what would disprove it, a built-in
+  skeptic step, at most 5 sins (Mortal / Venial / Unconfessed), a Clean
+  list of angles that held, and a DAMNED / PENANCE / ABSOLVED verdict.
+  `plan` offers it before approval; `pr` offers it before the description,
+  and sins accepted as risk land in the PR's Risk section.
+- Optional Codex second opinion: `se codex` reports whether the Codex CLI
+  is installed and logged in. When it is, `plan` offers a Codex review of
+  the plan combined with the check-sins offer, `pr` makes the same single
+  combined offer for the branch (its self-review skips review's own Codex
+  offer, so a PR asks once), `review` offers `codex
+  review` for uncommitted work or the current branch against its base (as
+  a verified `[codex]` addendum), and `debug` offers a read-only Codex
+  diagnosis on a redacted note once every hypothesis is dead. Every offer says Codex can read any file in the repo. Every run gets
+  a snapshot input and a fresh result; a failure is reported, never read as
+  "no findings".
+- `debug` step 4 now says what to do when a hypothesis dies, and when all
+  of them have.
+
 ## [0.2.0] - 2026-09-21
 
 Adopts the items marked "adopt" in the mattpocock/skills review (see

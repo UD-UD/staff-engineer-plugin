@@ -111,3 +111,54 @@ finding stated in simple words with its real-world consequence — and share
 the link. Include the Plan conformance block in the hand-off when it has
 content. The terminal keeps the compact `file:line` version; the artifact is
 the one a human reads end to end.
+
+## Codex second opinion
+
+Only when `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` prints `codex: ready (...)`
+and exits 0 — the plugin's own copy, because `se` on PATH can be an older
+checkout with no `codex` verb, which would silently hide the offer. When the
+`pr` skill is the caller, skip this offer: `pr` makes one combined offer at
+its step 3. Otherwise say
+nothing about Codex.
+
+Once the first review is done — delegated to staff-reviewer or done inline —
+present that report as above but mark its verdict line *provisional*, then
+offer in one line, naming what leaves the machine: "Also get a Codex second
+opinion? (Codex/OpenAI gets the diff and can read any file in this repo,
+including gitignored ones like `.env`)". Never automatic; declining is the
+off switch, and the verdict then stands as given.
+
+Codex can review only two scopes: uncommitted work (`--uncommitted`) and the
+current branch against its base (`--base <base>`) — the latter only when
+`git status --porcelain` is empty, because with a dirty tree a `--base`
+review also reads the uncommitted edits and
+reviews a different diff from `git diff <base>...HEAD`. For a commit range,
+another branch, a PR, or a branch review on a dirty tree, make no offer —
+say in one line which of those it is and why.
+
+Run contract:
+
+1. Remove any old result file first, so a stale one is never read.
+2. Run it in the background through `codex exec review`, which saves only
+   Codex's final answer (plain `codex review` prints its whole working log):
+   `codex exec review -c sandbox_mode='"read-only"' --uncommitted -o
+   scratchpad/codex-review.md` (or `--base <base>` in place of
+   `--uncommitted`).
+3. Collect the task and check its exit status. Read the result only if this
+   run wrote it.
+4. Any failure is reported as `Codex failed: <reason>` — never as "no
+   findings".
+5. Codex reads the live tree, so make no edits to it — fixes for the first
+   report included — until the run is collected; otherwise its findings cite
+   lines that no longer exist.
+
+Codex findings arrive as an addendum to the first report, not a rewrite of it.
+Each one must pass "Verification before reporting" like any other finding and
+is tagged `[codex]`. A finding that duplicates one already reported is noted
+"both models found it" instead of repeated. If nothing survives, say "Codex:
+no findings survived verification." Re-publish the explainer page with the
+addendum included, or publish one now if the first report had none and the
+addendum has a finding.
+
+If the user accepted the second opinion, end with the final one-line verdict
+after the addendum, restating or overturning the provisional one.

@@ -81,8 +81,37 @@ survives in the tree, so cleanup is a single grep and can't be forgotten.
 <!-- Editors: keep the example above as [DEBUG-xxxx]; real hex digits here
 would trip the guard on this repo. -->
 
+A result that kills the hypothesis moves you to the next one on the list.
+When every listed hypothesis is dead, go back to step 3 for a new ranked
+list. First, if `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` (the plugin's own
+copy — `se` on PATH may be an older checkout) prints `codex: ready (...)` and
+exits 0, offer a Codex diagnosis: "Get a Codex diagnosis? Codex (OpenAI) gets
+a redacted note of the red command, the minimised repro, and the ruled-out
+hypotheses — and, while diagnosing, can read any file in this repo,
+including gitignored ones like `.env`." The read-only sandbox stops writes,
+not reads, so never call the hand-off redacted without that second half. If
+the repo holds secrets in files, say so in the offer. If it isn't ready, say
+nothing about Codex.
+
+If the user accepts:
+
+- The note passes the Redact rule first: no tokens, credentials, or customer
+  data. Codex gets no current theory, only what was ruled out.
+- Write the redacted input once to `scratchpad/codex-debug-input.md` and
+  remove any old `scratchpad/codex-debug.md`. Then run
+  `codex exec -s read-only -o scratchpad/codex-debug.md "<instruction to
+  diagnose the bug using scratchpad/codex-debug-input.md>"`. The instruction
+  says to read nothing else under `scratchpad/` — that is where the session's
+  own theory and probes live, and Codex can read them.
+- Check the exit status, and read the result only if this run wrote it. On
+  failure, say `Codex failed: <reason>` and fall back to step 3.
+- Codex diagnoses only (read-only sandbox). Its answer becomes a new
+  hypothesis on the step-3 list with a falsifiable prediction, tested here
+  like any other. The fix still lands via step 5 with a regression test.
+
 **Done when:** the loop's result confirms or kills the hypothesis under
-test, and you know which.
+test, and you know which. A confirmed hypothesis, whoever proposed it, moves
+on to step 5.
 
 ## 5. Fix + regression test
 

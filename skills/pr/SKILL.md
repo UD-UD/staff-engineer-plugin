@@ -14,8 +14,9 @@ fast: explain why, surface the risk, and arrive pre-reviewed.
 
 Review the **full branch diff against the base branch**
 (`git diff <base>...HEAD`), not just the last commit — use the plugin's
-`review` skill / staff-reviewer agent for this. Fix blockers before opening
-the PR. A PR opened with known defects wastes the reviewer's pass.
+`review` skill / staff-reviewer agent for this, without its Codex offer —
+step 3 makes one combined offer instead. Fix blockers before opening the PR.
+A PR opened with known defects wastes the reviewer's pass.
 
 **Done when:** the reviewer's report is in hand and every Blocker is fixed.
 
@@ -30,7 +31,35 @@ the PR. A PR opened with known defects wastes the reviewer's pass.
 **Done when:** tests pass, the diff is clean, and the commit history reads
 well.
 
-### 3. Write the description
+### 3. Offer a sin check (+ Codex)
+
+Offer an adversarial pass in one line: "Want me to check this branch for
+sins before the PR?" When `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` prints
+`codex: ready` and `git status --porcelain` is empty, make it the one
+combined offer instead: "Check this branch for sins? (+ Codex second
+opinion — Codex/OpenAI gets the diff and can read any file in this repo,
+including gitignored ones like `.env`)". The user may take either, both, or
+neither; otherwise say nothing about Codex.
+
+- **Codex half:** start it first, in the background, as the `review`
+  skill's "Codex second opinion" section runs it for the current branch
+  against its base (`--base <base>`, same run contract). Make no edits
+  until it is collected.
+- **Check-sins half:** call the Skill tool with `"check-sins"` in change
+  mode, passing the Codex result path when both were taken, so its points
+  join the sins' act / accept / reject round. When only Codex was taken,
+  verify its points as `review` does and run that round yourself.
+
+Items the user chooses to act on are fixed (back to step 1 for the new
+commits); items accepted as risk are carried into the Risk section —
+including any already in the plan file's `## Accepted risks` from an
+earlier run. Any plan-file edit this step makes is committed before moving
+on, so step 2's clean-diff check still holds.
+
+**Done when:** the user has skipped it, or every sin and `[codex]` point
+has the user's decision.
+
+### 4. Write the description
 
 Title: conventional-commit style, imperative, specific.
 
@@ -49,6 +78,8 @@ Exact steps or commands a reviewer can run to see it working.
 ## Risk
 What could break, what to watch after merge, any rollback note.
 Migrations, config changes, and compat concerns go here explicitly.
+Sins accepted as risk (step 3, or the plan file's `## Accepted risks`) are
+named here.
 ```
 
 Include screenshots or before/after output for anything user-visible.
@@ -60,7 +91,7 @@ append them. The PR is authored by the user alone.
 **Done when:** the body has What, Why, How to verify, and Risk, with no AI
 attribution.
 
-### 4. Guide the reviewer
+### 5. Guide the reviewer
 
 Name the one or two files where the real decision lives and what kind of
 scrutiny you want ("the retry logic in `sync.ts` is the risky part"). If a
@@ -69,7 +100,7 @@ reviewer can skim them.
 
 **Done when:** the reviewer knows where to look first and what to skim.
 
-### 5. Open it
+### 6. Open it
 
 Opening a PR is outward-facing and is its own stage gate: show the title and
 body, and **wait for the user's go-ahead** before creating it. Then use the

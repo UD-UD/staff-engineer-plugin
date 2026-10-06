@@ -2,6 +2,71 @@
 
 Newest first. Each entry: what was decided, what was rejected, and why.
 
+## 2026-10-06 — Optional Codex second opinion via the CLI, detected by `se codex`
+
+**Decided.** When the Codex CLI is installed and logged in (`se codex`:
+`command -v codex`, then `codex login status`), `plan`, `pr`, `review` and
+`debug` offer it in one line as a second model; nothing changes when it is
+not. `plan` and `pr` combine the offer with check-sins (`pr` once, not in its self-review too); `review` offers it only for
+uncommitted work and the current branch against its base (the two scopes
+`codex review` reviews identically); `debug` offers a read-only diagnosis
+once every hypothesis is dead, from a redacted note. Each offer says Codex can read any file in the repo (a read-only sandbox stops writes, not reads). Plan and debug runs get a
+snapshot as input, review holds edits until Codex is collected, and every run writes a fresh result file; a failure is reported, never
+read as "no findings". The plan for this was itself checked by both the
+inquisitor and Codex: they overlapped on 2 points and each caught issues
+the other missed.
+
+**Rejected — calling the Codex plugin's `/codex:review` or
+`/codex:adversarial-review`.** Both are `disable-model-invocation: true`,
+so a skill cannot call them, and it would tie `se` to another plugin's file
+layout.
+
+**Rejected — detecting with `command -v codex` alone.** A logged-out Codex
+would fail mid-review; the login check costs ~0.05s.
+
+**Rejected — Codex writing the debug fix.** It would bypass
+regression-test-first and edit the tree outside the session's control.
+
+**Rejected — Codex on commit ranges or PRs.** `codex review` only takes
+uncommitted, a base branch, or one commit; anything else reviews a
+different diff from the one the staff reviewer saw.
+
+## 2026-10-06 — Adversarial review as `check-sins` + `inquisitor`, offered not forced
+
+**Decided.** A new skill `check-sins` delegates a plan or a branch change to
+a new read-only `inquisitor` agent that assumes the target is broken and
+tries to prove how. Ideas taken from a survey of eight existing tools
+(Codex `adversarial-review`, gstack, Anthropic `/code-review` and
+`/security-review`, superpowers, bug-hunter, `/premortem`, `the-fool`):
+fresh context with no author reasoning, steelman before attack, every sin
+cited with what would disprove it, a built-in skeptic step, at most 5
+sins, a Clean list as proof of coverage, a forced verdict line naming its
+finding, and a 3-round cap. `plan` offers it before approval; `pr` offers
+it before the description. The user decides each sin; nothing is fixed or
+dismissed by the session. A dismissed sin is logged as `Dismissed sin —`,
+never `Rejected —`: `plan` and the inquisitor read `Rejected —` as "idea
+not adopted", so a later fix for that sin would look like reopening it. Category names are our own (Mortal / Venial /
+Unconfessed / Clean; DAMNED / PENANCE / ABSOLVED), defined only in the
+agent.
+
+**Rejected — a mode on `review` / `staff-reviewer`.** Opposite stance:
+review assumes a competent author and is diff-only; mixing the two blurs
+both reports.
+
+**Rejected — running inline in the main session.** The session that wrote
+the plan is the worst one to attack it.
+
+**Rejected — always-on, or a stop-hook gate.** The user asked to be
+prompted; a gate on every plan and turn is noisy and costly.
+
+**Rejected — a Codex pass inside check-sins.** User's call; not wanted.
+Codex is offered beside check-sins in `plan`, not inside it (see the
+Codex entry above).
+
+**Rejected — a separate skeptic or validator agent per finding.** Token
+cost; the skeptic is a step inside the inquisitor. Revisit if false alarms
+get through.
+
 ## 2026-09-21 — Adopt select ideas from the mattpocock/skills review, reject the rest
 
 **Decided.** Extend what already exists rather than restructure, and add

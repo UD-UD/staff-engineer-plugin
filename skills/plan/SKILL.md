@@ -100,6 +100,37 @@ Present the plan under these headings: **Problem**, **Approach** (chosen +
 alternatives considered), **Files touched**, **Non-goals**, **Risks**,
 **Steps**.
 
+Alongside the plan, offer an adversarial pass in one line: "Want me to check
+this plan for sins before you approve?" On yes, call the Skill tool with
+`"check-sins"` in plan mode; sins the user chooses to act on revise the plan,
+which is presented again. Skipping it is a normal answer, not a warning.
+
+When `"${CLAUDE_PLUGIN_ROOT}/bin/se" codex` — the plugin's own copy, not
+whatever `se` is on PATH, which can be an older checkout that has no
+`codex` verb — prints `codex: ready`, make it one combined offer instead:
+"Check this plan for sins? (+ Codex second opinion — Codex/OpenAI gets the
+plan and can read any file in this repo, including gitignored ones like
+`.env`)". The user may take either, both, or neither; when Codex is not
+ready, say nothing about it. Start the Codex half first, in the background,
+so it runs while check-sins does. For the Codex half:
+
+- Write the plan once to `scratchpad/codex-plan-input.md` — Codex reads that
+  snapshot, never a file still being edited — and remove any old
+  `scratchpad/codex-plan-review.md`.
+- Run `codex exec -s read-only -o scratchpad/codex-plan-review.md` with an
+  instruction to find the strongest reasons the plan is wrong, citing plan
+  lines or `file:line`. Give it the snapshot and the repo only — never the
+  session's reasoning or the check-sins findings. `scratchpad/` holds those
+  (reports, drafts, notes) and Codex can read it, so the instruction says to
+  read nothing under `scratchpad/` except the snapshot.
+- Check the exit status and read the result only if this run wrote it; a
+  failure is reported as `Codex failed: <reason>`, never as "no findings".
+- When both were taken, pass the result path to check-sins as its Codex
+  input: it presents Codex's points beside the sins and puts them in the
+  same act / accept / reject round. When only Codex was taken, present its
+  points and run that round yourself, recording each decision exactly as
+  check-sins step 4 says for plan mode.
+
 **Then stop.** Reviewing the plan together is the cheapest place to catch a
 wrong assumption; after implementation starts, the same correction costs a
 rewrite. Ask for the user's go-ahead and wait for it — do not write code, do

@@ -5,7 +5,7 @@
 # ~/.claude/projects session transcripts), so it is correct after a reboot.
 # Live claude processes are an optional overlay, never the source of truth.
 #
-# usage: se [status|env|baseline|teardown <name>|debt|help]
+# usage: se [status|env|baseline|teardown <name>|debt|codex|help]
 #
 #   SE_COLOR=auto|always|never
 #                     color the output; auto (default) colors only when
@@ -39,11 +39,15 @@
 #   debt              scan for `se-debt: <ceiling>, <trigger>` markers in
 #                     comments; report file:line + text, flag ones missing
 #                     a trigger, and print a summary. Exit 0 always.
+#   codex             is the Codex CLI usable? Prints `codex: ready (<version>)`
+#                     and exits 0; `codex: not installed` or `codex: installed
+#                     but not logged in — run codex login` and exits 1. Needs
+#                     no git repo; never prints the login status output.
 #   help              this text
 set -u
 
 case "${1:-status}" in
-  status|env|baseline|teardown|debt) ;;
+  status|env|baseline|teardown|debt|codex) ;;
   help|-h|--help)
     # From line 2 to the first line that is not a comment, minus that line —
     # the usage block defines its own end, so editing it never silently
@@ -73,6 +77,25 @@ if [ "$use_color" = "1" ]; then
   C_RED=$'\033[31m'   C_GREEN=$'\033[32m' C_YELLOW=$'\033[33m' C_CYAN=$'\033[36m'
 else
   C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN='' C_YELLOW='' C_CYAN=''
+fi
+
+cmd_codex() {
+  if ! command -v codex >/dev/null 2>&1; then
+    echo "codex: not installed"
+    return 1
+  fi
+  # Exit status only: the login output may name the account, so it is dropped.
+  if ! codex login status >/dev/null 2>&1; then
+    echo "codex: installed but not logged in — run codex login"
+    return 1
+  fi
+  echo "codex: ready ($(codex --version 2>/dev/null))"
+}
+
+# codex needs no repo state, so it runs before the git-root lookup below.
+if [ "${1:-}" = "codex" ]; then
+  cmd_codex
+  exit $?
 fi
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
