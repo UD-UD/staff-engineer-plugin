@@ -4,7 +4,7 @@
 
 <br><br>
 
-![version](https://img.shields.io/badge/version-0.2.0-1D6FA5)
+![version](https://img.shields.io/badge/version-0.3.0-1D6FA5)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-1C2733)
 ![skills](https://img.shields.io/badge/skills-12-8CC8F0)
 ![agents](https://img.shields.io/badge/agents-4-A78BD4)

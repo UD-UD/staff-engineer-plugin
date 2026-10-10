@@ -6,6 +6,8 @@ release first.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-10
+
 ### Added
 
 - `check-sins` skill and read-only `inquisitor` agent: an adversarial pass
