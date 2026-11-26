@@ -284,6 +284,95 @@ check_no_debug_tag() { # ROOT
   fi
 }
 
+# --- check 8: the plugin names a license ------------------------------------
+#
+# `claude plugin validate` refuses a plugin for the plugin directory when it
+# has neither a LICENSE file nor a `license` in plugin.json, and adding the
+# marketplace on claude.ai (which is how a plugin reaches cloud sessions)
+# rejected it for the same reason.
+
+check_license() { # ROOT mode(real|fixture)
+  local check_root="$1" mode="$2"
+  local line="plugin names a license (LICENSE file or plugin.json \"license\")"
+  local declared
+  declared=$(python3 -c '
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get("license") or "")
+except Exception:
+    print("")
+' "$check_root/.claude-plugin/plugin.json" 2>/dev/null)
+  if [ -n "$declared" ] || [ -f "$check_root/LICENSE" ] || [ -f "$check_root/LICENSE.md" ] ||
+    [ -f "$check_root/LICENSE.txt" ]; then
+    LAST_CHECK_FAIL=0
+    if [ "$mode" = "real" ]; then ok "$line"; else printf 'ok - [fixture] %s\n' "$line"; fi
+  else
+    LAST_CHECK_FAIL=1
+    if [ "$mode" = "real" ]; then notok "$line"; else printf 'not ok - [fixture] %s\n' "$line"; fi
+  fi
+}
+
+# --- check 9: hook commands quote ${CLAUDE_PLUGIN_ROOT} ---------------------
+#
+# Unquoted, a plugin root containing a space splits the command into several
+# words and the hook fails; `claude plugin validate` warns on it.
+
+check_hook_quoting() { # ROOT mode(real|fixture)
+  local check_root="$1" mode="$2"
+  local local_fail=0
+  local status msg detail line
+  while IFS='|' read -r status msg detail; do
+    [ -n "$status" ] || continue
+    line="$msg"
+    [ -n "$detail" ] && line="$msg ($detail)"
+    if [ "$status" = "OK" ]; then
+      if [ "$mode" = "real" ]; then ok "$line"; else printf 'ok - [fixture] %s\n' "$line"; fi
+    else
+      local_fail=$((local_fail + 1))
+      if [ "$mode" = "real" ]; then notok "$line"; else printf 'not ok - [fixture] %s\n' "$line"; fi
+    fi
+  done < <(
+    python3 - "$check_root" <<'PY'
+import json, os, sys
+
+f = os.path.join(sys.argv[1], "hooks", "hooks.json")
+try:
+    with open(f, encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception as exc:
+    print("FAIL|hooks.json readable for quoting checks|%s" % exc)
+    sys.exit(0)
+
+commands = []
+
+
+def walk(node):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "command" and isinstance(v, str):
+                commands.append(v)
+            else:
+                walk(v)
+    elif isinstance(node, list):
+        for item in node:
+            walk(item)
+
+
+walk(data)
+
+token = "${CLAUDE_PLUGIN_ROOT}"
+for cmd in commands:
+    start = cmd.find(token)
+    while start != -1:
+        # Inside double quotes when an odd number of them precede it.
+        quoted = cmd[:start].count('"') % 2 == 1
+        print("%s|hook command quotes ${CLAUDE_PLUGIN_ROOT}|%s" % ("OK" if quoted else "FAIL", cmd))
+        start = cmd.find(token, start + 1)
+PY
+  )
+  LAST_CHECK_FAIL=$local_fail
+}
+
 # --- negative fixture: proves checks 4 & 5 can fail -------------------------
 
 tmpdir=$(mktemp -d)
@@ -322,6 +411,8 @@ check_frontmatter "$root" skills real
 check_frontmatter "$root" agents real
 check_hook_paths "$root"
 check_no_debug_tag "$root"
+check_license "$root" real
+check_hook_quoting "$root" real
 
 # --- run the negative fixture (checks 4 & 5 only) ---------------------------
 #
@@ -341,6 +432,33 @@ if [ "$LAST_CHECK_FAIL" -gt 0 ]; then
   ok "negative fixture: agent missing tools is reported as failing ($LAST_CHECK_FAIL check(s))"
 else
   notok "negative fixture: agent missing tools is reported as failing"
+fi
+
+# --- negative fixture for checks 8 & 9 --------------------------------------
+
+mkdir -p "$fixture_root/.claude-plugin" "$fixture_root/hooks"
+cat > "$fixture_root/.claude-plugin/plugin.json" <<'EOF'
+{ "name": "bad", "version": "0.0.0", "description": "No license anywhere." }
+EOF
+cat > "$fixture_root/hooks/hooks.json" <<'EOF'
+{ "hooks": { "PreToolUse": [ { "hooks": [
+  { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/x.sh" },
+  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/y.sh\"" }
+] } ] } }
+EOF
+
+check_license "$fixture_root" fixture
+if [ "$LAST_CHECK_FAIL" -gt 0 ]; then
+  ok "negative fixture: a plugin with no license is reported as failing"
+else
+  notok "negative fixture: a plugin with no license is reported as failing"
+fi
+
+check_hook_quoting "$fixture_root" fixture
+if [ "$LAST_CHECK_FAIL" -eq 1 ]; then
+  ok "negative fixture: exactly the unquoted hook command is reported as failing"
+else
+  notok "negative fixture: exactly the unquoted hook command is reported as failing (got $LAST_CHECK_FAIL)"
 fi
 
 printf 'RESULT pass=%d fail=%d\n' "$pass" "$fail"

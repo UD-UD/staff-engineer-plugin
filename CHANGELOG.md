@@ -6,6 +6,20 @@ release first.
 
 ## [Unreleased]
 
+### Added
+
+- MIT `LICENSE`, also declared as `"license": "MIT"` in `plugin.json`.
+  Without one, `claude plugin validate` refuses the plugin for the plugin
+  directory, and claude.ai rejected the marketplace with "1 plugin failed
+  validation", which kept the plugin out of cloud sessions.
+
+### Fixed
+
+- The `git-guard` and `scratchpad-guard` hook commands now quote
+  `${CLAUDE_PLUGIN_ROOT}`, so a plugin root containing a space no longer
+  splits the command and fails the hook.
+- `test-manifest.sh` checks both, each with a negative fixture.
+
 ## [0.3.0] - 2026-10-10
 
 ### Added
