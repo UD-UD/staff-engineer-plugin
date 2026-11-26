@@ -6,6 +6,8 @@ release first.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-26
+
 ### Added
 
 - MIT `LICENSE`, also declared as `"license": "MIT"` in `plugin.json`.
